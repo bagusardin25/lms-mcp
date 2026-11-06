@@ -2,18 +2,18 @@
 
 Bagus Ardin Prayoga
 
-MCP server untuk LMS Telkom University (Moodle). AI bisa melihat mata kuliah, deadline, dan materi, serta mengambil file LMS memakai akunmu sendiri.
+Kita buat MCP server ini untuk LMS Telkom University (Moodle). Dengan server ini, kita bisa meminta AI melihat mata kuliah, deadline, dan materi, serta mengambil file LMS memakai akun kita sendiri.
 
-Ini proyek mahasiswa yang **tidak resmi** dan tidak berafiliasi dengan Telkom University atau CeLOE. Aturan akademik tetap tanggung jawab masing-masing pengguna.
+Kita membuatnya sebagai mahasiswa. Kita tidak berafiliasi dengan Telkom University atau CeLOE. Aturan akademik tetap tanggung jawab kita.
 
 ## Pilih mode
 
-| Kamu memakai | Mode | Perlu deploy? |
+| Kita memakai | Mode | Perlu deploy? |
 |---|---|---|
 | Claude Code, Codex, Claude Desktop, Cursor, VS Code, Antigravity, AI lokal seperti LM Studio | Lokal (stdio) | Tidak |
 | claude.ai, ChatGPT, dan AI chat web lain yang mendukung custom MCP | Online (HTTP) | Ya |
 
-Untuk akunmu sendiri, pakai mode lokal. Token tetap di komputermu. Mode online hanya untuk AI yang berjalan di web, dan hanya di server yang kamu percaya.
+Untuk akun kita sendiri, kita pakai mode lokal. Token tetap di komputer kita. Mode online hanya untuk AI yang berjalan di web, dan hanya di server yang kita percaya.
 
 ## Tool yang tersedia
 
@@ -25,38 +25,38 @@ Untuk akunmu sendiri, pakai mode lokal. Token tetap di komputermu. Mode online h
 | `get_course_materials` | Isi mata kuliah per bagian: aktivitas, file, dan link luar | Keduanya |
 | `read_file_text` | Membaca teks file per halaman, untuk merangkum atau menjawab pertanyaan | Keduanya |
 | `get_file_link` | Membuat tautan file untuk dibuka di browser | Keduanya |
-| `download_file` | Mengunduh file LMS ke komputermu, maksimal 200 MB | Lokal |
+| `download_file` | Mengunduh file LMS ke komputer kita, maksimal 200 MB | Lokal |
 
-Semua tool hanya membaca data LMS, jadi belum ada yang bisa mengumpulkan tugas atau mengirim pesan. Ini sengaja. Mengumpulkan tugas lewat AI mudah terjadi tanpa sengaja, dan aksinya tercatat di LMS atas nama akunmu.
+Semua tool hanya membaca data LMS, jadi kita belum bisa mengumpulkan tugas atau mengirim pesan lewat server ini. Ini sengaja. Mengumpulkan tugas lewat AI mudah terjadi tanpa kita sengaja, dan aksinya tercatat di LMS atas nama akun kita.
 
 ### Batasan membaca file
 
 `read_file_text` mendukung PDF, PPTX, DOCX, TXT, MD, CSV, dan HTML sampai 50 MB, tanpa menyimpan file di server.
 
-- **File di Office 365 tidak bisa dibaca.** Dosen bisa menaruh materi di Office 365 lalu menautkannya ke LMS, dan Moodle menolak mengirim file seperti ini lewat token. File ini ditandai `stored_outside_lms`. Buka lewat `get_file_link` di browser, lalu unggah filenya ke AI kalau isinya perlu dibaca.
+- **File di Office 365 tidak bisa kita baca.** Dosen bisa menaruh materi di Office 365 lalu menautkannya ke LMS, dan Moodle menolak mengirim file seperti ini lewat token. File ini kita tandai `stored_outside_lms`. Kita buka lewat `get_file_link` di browser, lalu kita unggah filenya ke AI kalau isinya perlu kita baca.
 - **Gambar tidak terbaca.** PDF hasil scan hampir tidak menghasilkan teks, dan gambar serta diagram di slide tidak ikut.
-- **Format lain belum didukung,** termasuk XLSX, PPT, dan DOC versi lama.
+- **Format lain belum kita dukung,** termasuk XLSX, PPT, dan DOC versi lama.
 
 ## Ambil token
 
-LMS hanya bisa login lewat Office365, jadi token diambil lewat alur SSO aplikasi mobile Moodle.
+LMS kita hanya bisa login lewat Office365, jadi kita ambil token lewat alur SSO aplikasi mobile Moodle.
 
-1. Buka [halaman token](https://lms.telkomuniversity.ac.id/admin/tool/mobile/launch.php?service=moodle_mobile_app&passport=1&urlscheme=moodlemobile&confirmed=1), lalu login kalau diminta.
-2. Klik kanan tautan "Click here if the app does not open automatically", lalu pilih "Copy link address".
+1. Kita buka [halaman token](https://lms.telkomuniversity.ac.id/admin/tool/mobile/launch.php?service=moodle_mobile_app&passport=1&urlscheme=moodlemobile&confirmed=1), lalu login kalau diminta.
+2. Kita klik kanan tautan "Click here if the app does not open automatically", lalu pilih "Copy link address".
 
-Tautan harus sama persis sampai ke tiap huruf, jadi jangan diketik ulang atau dibaca dari gambar. Kalau ditolak, tekan `F12` di halaman token, lalu jalankan ini di tab Console untuk menyalinnya:
+Tautan harus sama persis sampai ke tiap huruf, jadi jangan kita ketik ulang atau kita baca dari gambar. Kalau ditolak, kita tekan `F12` di halaman token, lalu jalankan ini di tab Console untuk menyalinnya:
 
 ```
 copy(document.getElementById('launchapp').href)
 ```
 
-Token ini setara akses penuh ke akun LMS, jadi jangan dibagikan atau dikirim ke chat AI, termasuk lewat screenshot.
+Token ini setara akses penuh ke akun LMS kita, jadi jangan kita bagikan atau kita kirim ke chat AI, termasuk lewat screenshot.
 
-Token punya masa berlaku yang diatur admin LMS, dengan default Moodle 12 minggu. Kalau sudah habis, tool akan membalas error `accessexception` atau `invalidtoken`, lalu ulangi langkah di atas.
+Token punya masa berlaku yang diatur admin LMS, dengan default Moodle 12 minggu. Kalau sudah habis, tool membalas error `accessexception` atau `invalidtoken`, lalu kita ulangi langkah di atas.
 
 ## Mode lokal
 
-Butuh [uv](https://docs.astral.sh/uv/).
+Kita butuh [uv](https://docs.astral.sh/uv/).
 
 ```bash
 git clone https://github.com/bagusardin25/mcp-lmstelkom.git
@@ -64,13 +64,13 @@ cd mcp-lmstelkom
 uv sync
 ```
 
-Salin `.env.example` menjadi `.env`, lalu tempel tautan token setelah `LMS_TOKEN=`. File `.env` tidak ikut di-commit. Setelah itu uji aksesnya:
+Kita salin `.env.example` menjadi `.env`, lalu tempel tautan token setelah `LMS_TOKEN=`. File `.env` tidak kita ikutkan di commit. Setelah itu kita uji aksesnya:
 
 ```bash
 uv run lms-mcp check
 ```
 
-Ganti `/path/ke/mcp-lmstelkom` dengan lokasi folder proyek ini.
+Kita ganti `/path/ke/mcp-lmstelkom` dengan lokasi folder proyek ini.
 
 **Claude Code**
 
@@ -99,52 +99,52 @@ codex mcp add lms-telkom -- uv run --directory /path/ke/mcp-lmstelkom lms-mcp se
 
 VS Code memakai format yang mirip di `mcp.json`, tapi kuncinya `servers`, bukan `mcpServers`.
 
-Kalau `uv` tidak ditemukan oleh aplikasinya, isi `command` dengan lokasi lengkap `uv`.
+Kalau `uv` tidak ditemukan oleh aplikasinya, kita isi `command` dengan lokasi lengkap `uv`.
 
 ## Mode online
 
 ### Deploy
 
-Repo ini berisi `Dockerfile`, jadi bisa dijalankan di hosting apa pun yang mendukung container. `railway.json` sudah disiapkan untuk Railway.
+Di repo ini ada `Dockerfile`, jadi kita bisa menjalankannya di hosting apa pun yang mendukung container. `railway.json` sudah kita siapkan untuk Railway.
 
-Isi variabel ini di pengaturan hosting:
+Kita isi variabel ini di pengaturan hosting:
 
 | Variabel | Keterangan |
 |---|---|
 | `LMS_PUBLIC_URL` | Alamat publik server, contoh `https://nama-server.up.railway.app` |
 | `LMS_SERVER_SECRET` | Kunci enkripsi acak, minimal 32 karakter |
-| `LMS_EXTRA_REDIRECT_HOSTS` | Opsional, host klien tambahan yang diizinkan, dipisah koma |
+| `LMS_EXTRA_REDIRECT_HOSTS` | Opsional, host klien tambahan yang kita izinkan, dipisah koma |
 
-Buat `LMS_SERVER_SECRET` dengan perintah ini, dan jangan pernah mengubahnya tanpa alasan, karena semua pengguna akan perlu login ulang:
+Kita buat `LMS_SERVER_SECRET` dengan perintah ini, dan jangan pernah kita ubah tanpa alasan, karena kita yang sudah tersambung akan perlu login ulang:
 
 ```bash
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-Jangan isi `LMS_TOKEN` di hosting, karena mode online tidak memakainya.
+Jangan kita isi `LMS_TOKEN` di hosting, karena mode online tidak memakainya.
 
 ### Sambungkan ke AI chat
 
-Alamat connector-nya adalah `LMS_PUBLIC_URL` ditambah `/mcp`.
+Alamat connector kita adalah `LMS_PUBLIC_URL` ditambah `/mcp`.
 
-- **claude.ai:** Settings, Connectors, lalu Add custom connector.
-- **ChatGPT:** aktifkan Developer Mode, lalu tambahkan connector di pengaturan Apps & Connectors. Ketersediaannya tergantung paket.
-- **AI chat lain:** tambahkan host callback-nya ke `LMS_EXTRA_REDIRECT_HOSTS`. Hanya claude.ai dan ChatGPT yang diizinkan secara default.
+- **claude.ai:** kita buka Settings, Connectors, lalu Add custom connector.
+- **ChatGPT:** kita aktifkan Developer Mode, lalu tambahkan connector di pengaturan Apps & Connectors. Ketersediaannya tergantung paket.
+- **AI chat lain:** kita tambahkan host callback-nya ke `LMS_EXTRA_REDIRECT_HOSTS`. Hanya claude.ai dan ChatGPT yang kita izinkan secara default.
 
-Saat menyambungkan, akan muncul halaman login server ini. Tempel tautan token di sana.
+Saat kita menyambungkan, muncul halaman login server ini. Kita tempel tautan token di sana.
 
 ### Cara kerja login
 
-Server tidak punya database. Token LMS dienkripsi dan disimpan di dalam access token yang dipegang aplikasi AI, dan hanya server yang bisa membukanya. Karena itu, tiap orang otomatis memakai akunnya sendiri.
+Server ini tidak kita beri database. Token LMS kita enkripsi dan simpan di dalam access token yang dipegang aplikasi AI, dan hanya server yang bisa membukanya. Karena itu tiap akun tetap memakai tokennya sendiri.
 
-Tetap saja, pemilik server secara teknis bisa membaca token yang lewat. Tempel token hanya di server milik orang yang kamu percaya, atau pakai mode lokal. Untuk memutus akses sepenuhnya, reset token di halaman Security keys LMS.
+Kita yang menjalankan server secara teknis bisa membaca token yang lewat. Karena itu kita tempel token hanya di server yang kita percaya, atau kita pakai mode lokal. Untuk memutus akses sepenuhnya, kita reset token di halaman Security keys LMS.
 
 ## Keamanan
 
-- Isi LMS bisa ditulis siapa saja di kelasmu, termasuk teks yang mencoba memberi perintah ke AI. Periksa dulu aksi AI sebelum menyetujuinya.
-- Data LMS yang dibaca AI ikut terkirim ke penyedia model AI, kecuali kalau memakai model lokal.
-- Token hanya dikirim ke LMS, dan URL unduhan ke server lain ditolak.
-- Semua aksi tercatat di log LMS atas nama akunmu.
+- Isi LMS bisa ditulis siapa saja di kelas kita, termasuk teks yang mencoba memberi perintah ke AI. Kita periksa dulu aksi AI sebelum menyetujuinya.
+- Data LMS yang kita baca lewat AI ikut terkirim ke penyedia model AI, kecuali kalau kita memakai model lokal.
+- Token hanya kita kirim ke LMS, dan URL unduhan ke server lain kita tolak.
+- Semua aksi tercatat di log LMS atas nama akun kita.
 
 ## Konfigurasi mode lokal
 
@@ -154,7 +154,7 @@ Tetap saja, pemilik server secara teknis bisa membaca token yang lewat. Tempel t
 | `LMS_DOWNLOAD_DIR` | Opsional, default folder `Downloads/lms-telkom` |
 | `LMS_BASE_URL` | Opsional, default `https://lms.telkomuniversity.ac.id` |
 
-Variabel environment mengalahkan nilai di `.env`.
+Variabel environment mengalahkan nilai yang kita tulis di `.env`.
 
 ## Tes
 
@@ -162,4 +162,4 @@ Variabel environment mengalahkan nilai di `.env`.
 uv run pytest
 ```
 
-Perintah yang sama juga berjalan di GitHub pada setiap push dan pull request.
+Perintah yang sama juga kita jalankan di GitHub pada setiap push dan pull request.
