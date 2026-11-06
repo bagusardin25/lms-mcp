@@ -1,0 +1,13 @@
+# Berisi token LMS, jangan pernah masuk ke image
+.env
+.env.*
+!.env.example
+
+.venv
+.git
+tests
+__pycache__
+*.pyc
+.pytest_cache
+dist
+build
