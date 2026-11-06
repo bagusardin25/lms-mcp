@@ -6,3 +6,4 @@ authors:
   - given-names: "Bagus Ardin"
     family-names: "Prayoga"
 repository-code: "https://github.com/bagusardin25/mcp-lmstelkom"
+license: MIT

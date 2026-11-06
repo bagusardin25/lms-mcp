@@ -164,4 +164,4 @@ uv run pytest
 
 Hak cipta © 2026 Bagus Ardin Prayoga, Angkatan 24.
 
-Proyek ini belum memakai lisensi open source, jadi memakai ulang atau menyebarkan kodenya perlu izin pembuat. Kalau kamu merujuk atau mengembangkan proyek ini, cantumkan nama pembuat dan tautan ke [repo aslinya](https://github.com/bagusardin25/mcp-lmstelkom).
+Proyek ini memakai [lisensi MIT](LICENSE). Kamu boleh memakai, mengubah, dan menyebarkan kodenya, selama keterangan hak cipta dan teks lisensinya tetap disertakan. Kalau kamu mengembangkan proyek ini, mohon cantumkan juga tautan ke [repo aslinya](https://github.com/bagusardin25/mcp-lmstelkom).

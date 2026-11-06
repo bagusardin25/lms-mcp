@@ -213,11 +213,19 @@ class LmsOAuthProvider:
             info = await anyio.to_thread.run_sync(self._verify_lms_token, lms_token)
         except TokenError:
             return self._render_login(
-                sealed, data, "Tautan tidak terbaca. Salin ulang lewat Copy link address.", 400
+                sealed,
+                data,
+                "Token tidak terbaca. Salin ulang tautannya lewat Copy link address, "
+                "jangan diketik ulang.",
+                400,
             )
         except MoodleError:
             return self._render_login(
-                sealed, data, "LMS menolak token ini. Ambil tautan yang baru, lalu coba lagi.", 400
+                sealed,
+                data,
+                "LMS menolak token ini, mungkin sudah di-reset atau kedaluwarsa. "
+                "Ambil tautan yang baru, lalu coba lagi.",
+                400,
             )
         except httpx.HTTPError:
             return self._render_login(sealed, data, "LMS tidak bisa dihubungi. Coba lagi.", 502)
@@ -454,7 +462,7 @@ Akses akan dikirim ke <code>{target}</code>. Lanjutkan hanya kalau kamu yang mem
 <ol>
 <li>Buka <a href="{token_page}" target="_blank" rel="noopener noreferrer">halaman token LMS</a>, lalu login kalau diminta.</li>
 <li>Klik kanan tulisan "Click here if the app does not open automatically", lalu pilih <em>Copy link address</em>.</li>
-<li>Tempel hasilnya di kotak ini.</li>
+<li>Tempel hasilnya di kotak ini. Isi <code>LMS_TOKEN</code> dari file <code>.env</code> juga bisa dipakai.</li>
 </ol>
 <form method="post" action="login">
 <input type="hidden" name="request" value="{request}">

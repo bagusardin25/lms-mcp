@@ -23,7 +23,10 @@ VERIFIER = "v" * 64
 CHALLENGE = (
     base64.urlsafe_b64encode(hashlib.sha256(VERIFIER.encode()).digest()).rstrip(b"=").decode()
 )
-USERS = {"token-ani": "Ani", "token-budi": "Budi"}
+TOKEN_ANI = "a" * 32
+TOKEN_BUDI = "b" * 32
+TOKEN_REJECTED = "c" * 32
+USERS = {TOKEN_ANI: "Ani", TOKEN_BUDI: "Budi"}
 MCP_HEADERS = {
     "Accept": "application/json, text/event-stream",
     "Content-Type": "application/json",
@@ -115,7 +118,7 @@ def submit_login(client, request, link):
     return client.post("/login", data={"request": request, "lms_link": link})
 
 
-def get_code(client, client_id, token="token-ani"):
+def get_code(client, client_id, token=TOKEN_ANI):
     response = submit_login(client, login_request(client, client_id), lms_link(token))
     assert response.status_code == 303
     return parse_qs(urlsplit(response.headers["location"]).query)["code"][0]
@@ -134,7 +137,7 @@ def exchange(client, client_id, code, verifier=VERIFIER):
     )
 
 
-def sign_in(client, token="token-ani"):
+def sign_in(client, token=TOKEN_ANI):
     client_id = register(client).json()["client_id"]
     tokens = exchange(client, client_id, get_code(client, client_id, token)).json()
     return client_id, tokens
@@ -253,21 +256,42 @@ def test_login_form_posts_back_to_login(client):
     sealed = html.unescape(re.search(r'name="request" value="([^"]+)"', page).group(1))
     action = re.search(r'<form method="post" action="([^"]+)"', page).group(1)
 
-    response = client.post(action, data={"request": sealed, "lms_link": lms_link("token-ani")})
+    response = client.post(action, data={"request": sealed, "lms_link": lms_link(TOKEN_ANI)})
     assert response.status_code == 303
+
+
+@pytest.mark.parametrize(
+    "pasted",
+    [
+        TOKEN_ANI,
+        f"'{TOKEN_ANI}'",
+        f"LMS_TOKEN='{TOKEN_ANI}'",
+        lms_link(TOKEN_ANI),
+    ],
+)
+def test_login_accepts_token_copied_from_env_file(client, pasted):
+    client_id = register(client).json()["client_id"]
+
+    response = submit_login(client, login_request(client, client_id), pasted)
+
+    assert response.status_code == 303
+    code = parse_qs(urlsplit(response.headers["location"]).query)["code"][0]
+    tokens = exchange(client, client_id, code).json()
+    result = call_tool(client, tokens["access_token"], "get_profile")
+    assert "Ani" in result["content"][0]["text"]
 
 
 def test_login_redirects_with_code_and_state(client):
     client_id = register(client).json()["client_id"]
 
-    response = submit_login(client, login_request(client, client_id), lms_link("token-ani"))
+    response = submit_login(client, login_request(client, client_id), lms_link(TOKEN_ANI))
 
     assert response.status_code == 303
     location = urlsplit(response.headers["location"])
     assert f"{location.scheme}://{location.netloc}{location.path}" == REDIRECT
     query = parse_qs(location.query)
     assert query["state"] == ["state-1"]
-    assert "token-ani" not in response.headers["location"]
+    assert TOKEN_ANI not in response.headers["location"]
 
 
 @pytest.mark.parametrize(
@@ -275,7 +299,7 @@ def test_login_redirects_with_code_and_state(client):
     [
         ("", "belum diisi"),
         ("moodlemobile://token=!!!", "tidak terbaca"),
-        (lms_link("token-salah"), "menolak token"),
+        (lms_link(TOKEN_REJECTED), "menolak token"),
     ],
 )
 def test_login_rejects_bad_token_without_echoing_it(client, link, message):
@@ -292,7 +316,7 @@ def test_login_rejects_bad_token_without_echoing_it(client, link, message):
 
 @pytest.mark.parametrize("request_value", ["", "palsu"])
 def test_login_rejects_forged_request(client, request_value):
-    response = submit_login(client, request_value, lms_link("token-ani"))
+    response = submit_login(client, request_value, lms_link(TOKEN_ANI))
 
     assert response.status_code == 400
     assert "tidak berlaku" in response.text
@@ -304,9 +328,9 @@ def test_login_limits_attempts(client, monkeypatch):
     limit = oauth.LOGIN_ATTEMPTS_PER_MINUTE
 
     for _ in range(limit):
-        assert submit_login(client, request, lms_link("token-salah")).status_code == 400
+        assert submit_login(client, request, lms_link(TOKEN_REJECTED)).status_code == 400
 
-    assert submit_login(client, request, lms_link("token-ani")).status_code == 429
+    assert submit_login(client, request, lms_link(TOKEN_ANI)).status_code == 429
 
 
 def test_code_exchange_issues_tokens_without_exposing_lms_token(client):
@@ -316,8 +340,8 @@ def test_code_exchange_issues_tokens_without_exposing_lms_token(client):
     assert tokens["expires_in"] == oauth.ACCESS_TOKEN_SECONDS
     assert tokens["refresh_token"]
     assert "lms" in tokens["scope"].split()
-    assert "token-ani" not in json.dumps(tokens)
-    assert "token-ani" not in client_id
+    assert TOKEN_ANI not in json.dumps(tokens)
+    assert TOKEN_ANI not in client_id
 
 
 def test_code_needs_correct_pkce_verifier(client):
@@ -347,8 +371,8 @@ def test_code_cannot_be_used_by_other_client(client):
 
 
 def test_tools_use_token_of_signed_in_user(client):
-    _, ani = sign_in(client, "token-ani")
-    _, budi = sign_in(client, "token-budi")
+    _, ani = sign_in(client, TOKEN_ANI)
+    _, budi = sign_in(client, TOKEN_BUDI)
 
     ani_result = call_tool(client, ani["access_token"], "get_profile")
     budi_result = call_tool(client, budi["access_token"], "get_profile")
@@ -358,9 +382,9 @@ def test_tools_use_token_of_signed_in_user(client):
 
 
 def test_server_ignores_owner_token_in_environment(monkeypatch):
-    monkeypatch.setenv("LMS_TOKEN", "token-budi")
+    monkeypatch.setenv("LMS_TOKEN", TOKEN_BUDI)
     with TestClient(make_app(), base_url=PUBLIC_URL, follow_redirects=False) as test_client:
-        _, ani = sign_in(test_client, "token-ani")
+        _, ani = sign_in(test_client, TOKEN_ANI)
         result = call_tool(test_client, ani["access_token"], "get_profile")
 
     assert "Ani" in result["content"][0]["text"]
@@ -424,7 +448,7 @@ def test_token_sealed_with_other_secret_is_rejected(client):
             "scopes": ["lms"],
             "resource": None,
             "subject": "1",
-            "lms_token": "token-ani",
+            "lms_token": TOKEN_ANI,
             "exp": 9999999999,
         },
     )
@@ -445,7 +469,7 @@ def test_expired_access_token_is_rejected(client):
             "scopes": ["lms"],
             "resource": None,
             "subject": "1",
-            "lms_token": "token-ani",
+            "lms_token": TOKEN_ANI,
             "exp": 1,
         },
     )
