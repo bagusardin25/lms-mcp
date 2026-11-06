@@ -13,6 +13,8 @@ Ini proyek mahasiswa yang **tidak resmi** dan tidak berafiliasi dengan Telkom Un
 | Claude Code, Codex, Claude Desktop, Cursor, VS Code, Antigravity, AI lokal seperti LM Studio | Lokal (stdio) | Tidak |
 | claude.ai, ChatGPT, dan AI chat web lain yang mendukung custom MCP | Online (HTTP) | Ya |
 
+Untuk akunmu sendiri, pakai mode lokal. Token tetap di komputermu. Mode online hanya untuk AI yang berjalan di web, dan hanya di server yang kamu percaya.
+
 ## Tool yang tersedia
 
 | Tool | Fungsi | Mode |
@@ -25,7 +27,7 @@ Ini proyek mahasiswa yang **tidak resmi** dan tidak berafiliasi dengan Telkom Un
 | `get_file_link` | Membuat tautan file untuk dibuka di browser | Keduanya |
 | `download_file` | Mengunduh file LMS ke komputermu, maksimal 200 MB | Lokal |
 
-Semua tool hanya membaca data LMS, jadi belum ada yang bisa mengumpulkan tugas atau mengirim pesan.
+Semua tool hanya membaca data LMS, jadi belum ada yang bisa mengumpulkan tugas atau mengirim pesan. Ini sengaja. Mengumpulkan tugas lewat AI mudah terjadi tanpa sengaja, dan aksinya tercatat di LMS atas nama akunmu.
 
 ### Batasan membaca file
 
@@ -57,7 +59,7 @@ Token punya masa berlaku yang diatur admin LMS, dengan default Moodle 12 minggu.
 Butuh [uv](https://docs.astral.sh/uv/).
 
 ```bash
-git clone <url-repo-ini>
+git clone https://github.com/bagusardin25/mcp-lmstelkom.git
 cd mcp-lmstelkom
 uv sync
 ```
@@ -159,3 +161,5 @@ Variabel environment mengalahkan nilai di `.env`.
 ```bash
 uv run pytest
 ```
+
+Perintah yang sama juga berjalan di GitHub pada setiap push dan pull request.
