@@ -543,3 +543,51 @@ def test_http_config_requires_url_and_strong_secret(tmp_path, monkeypatch):
     assert config.public_url == "https://mcp.contoh.test"
     assert config.port == 9000
     assert config.extra_redirect_hosts == {"a.test", "b.test"}
+
+
+@pytest.mark.parametrize(
+    "path, media_type, signature",
+    [
+        ("/favicon.ico", "image/x-icon", b"\x00\x00\x01\x00"),
+        ("/icon-64.png", "image/png", b"\x89PNG"),
+        ("/icon-256.png", "image/png", b"\x89PNG"),
+    ],
+)
+def test_icons_are_public_without_login(client, path, media_type, signature):
+    response = client.get(path)
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == media_type
+    assert response.content.startswith(signature)
+    assert "max-age" in response.headers["cache-control"]
+
+
+def test_server_info_advertises_hosted_icons(client):
+    _, tokens = sign_in(client)
+
+    response = mcp(
+        client,
+        "initialize",
+        {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {"name": "uji", "version": "1"},
+        },
+        tokens["access_token"],
+    )
+
+    icons = response.json()["result"]["serverInfo"]["icons"]
+    assert {icon["src"] for icon in icons} == {
+        f"{PUBLIC_URL}/icon-256.png",
+        f"{PUBLIC_URL}/icon-64.png",
+    }
+
+
+def test_login_page_can_show_its_own_icon_only(client):
+    client_id = register(client).json()["client_id"]
+
+    response = client.get("/login", params={"request": login_request(client, client_id)})
+
+    assert 'src="/icon-64.png"' in response.text
+    assert 'href="/favicon.ico"' in response.text
+    assert "img-src 'self'" in response.headers["content-security-policy"]

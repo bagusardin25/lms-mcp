@@ -1,3 +1,4 @@
+import base64
 import json
 
 import anyio
@@ -6,7 +7,7 @@ from mcp import Client
 
 from lmstelkom_mcp.auth import TokenError
 from lmstelkom_mcp.moodle import MoodleClient
-from lmstelkom_mcp.server import build_server
+from lmstelkom_mcp.server import build_server, embedded_icons
 from lmstelkom_mcp.service import LmsService
 
 BASE_URL = "https://lms.contoh.test"
@@ -63,6 +64,20 @@ def test_list_courses_schema_limits_status_values(tmp_path):
         "future",
         "all",
     }
+
+
+def test_local_server_embeds_icon_without_public_address(tmp_path):
+    async def run():
+        server = build_server(lambda: working_service(tmp_path), icons=embedded_icons())
+        async with Client(server) as client:
+            return client.server_info.icons
+
+    icons = anyio.run(run)
+
+    assert icons[0].mime_type == "image/png"
+    prefix, data = icons[0].src.split(",", 1)
+    assert prefix == "data:image/png;base64"
+    assert base64.b64decode(data).startswith(b"\x89PNG")
 
 
 def test_call_tool_returns_data(tmp_path):

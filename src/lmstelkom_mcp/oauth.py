@@ -60,7 +60,8 @@ _SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     # form-action sengaja tidak diisi: browser menerapkannya juga pada redirect ke klien.
     "Content-Security-Policy": (
-        "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'"
+        "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; "
+        "base-uri 'none'; frame-ancestors 'none'"
     ),
 }
 
@@ -441,20 +442,25 @@ textarea{width:100%;box-sizing:border-box;font:14px monospace;padding:.5rem}
 button{font:inherit;font-weight:600;padding:.6rem 1.2rem;margin-top:.75rem;cursor:pointer}
 .error{border-left:4px solid #c0392b;padding:.25rem .75rem}
 .note{font-size:.875rem;opacity:.8}
+.logo{display:block;margin-bottom:.5rem}
 code{overflow-wrap:anywhere}"""
 
 _MESSAGE_TEMPLATE = (
     '<!doctype html><html lang="id"><head><meta charset="utf-8">'
     '<meta name="viewport" content="width=device-width,initial-scale=1">'
+    '<link rel="icon" href="/favicon.ico">'
     f"<title>LMS Telkom MCP</title><style>{_STYLE.replace('{', '{{').replace('}', '}}')}</style>"
-    "</head><body><h1>LMS Telkom MCP</h1><p>{message}</p></body></html>"
+    '</head><body><img class="logo" src="/icon-64.png" width="48" height="48" alt="">'
+    "<h1>LMS Telkom MCP</h1><p>{message}</p></body></html>"
 )
 
 _LOGIN_TEMPLATE = (
     '<!doctype html><html lang="id"><head><meta charset="utf-8">'
     '<meta name="viewport" content="width=device-width,initial-scale=1">'
+    '<link rel="icon" href="/favicon.ico">'
     f"<title>Hubungkan LMS</title><style>{_STYLE.replace('{', '{{').replace('}', '}}')}</style>"
     """</head><body>
+<img class="logo" src="/icon-64.png" width="48" height="48" alt="">
 <h1>Hubungkan akun LMS-mu</h1>
 <p><strong>{client}</strong> ingin membaca data LMS atas namamu, seperti mata kuliah, deadline, dan materi.
 Akses akan dikirim ke <code>{target}</code>. Lanjutkan hanya kalau kamu yang memulai proses ini.</p>

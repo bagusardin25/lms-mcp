@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import base64
 import json
 from functools import lru_cache
+from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlsplit
 
@@ -14,7 +16,7 @@ from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, Re
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
-from mcp.types import ToolAnnotations
+from mcp.types import Icon, ToolAnnotations
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse, Response
 
@@ -48,6 +50,22 @@ SAVES_LOCAL_FILE = ToolAnnotations(
 
 # Asal yang boleh dikirim klien web. Tiap permintaan tetap harus membawa access token.
 _WEB_CLIENT_ORIGINS = ["https://claude.ai", "https://claude.com", "https://chatgpt.com"]
+
+_ASSETS = Path(__file__).parent / "assets"
+_ICON_SIZES = (256, 64)
+
+
+def embedded_icons() -> list[Icon]:
+    """Ikon untuk mode lokal, yang tidak punya alamat publik untuk menyajikan gambar."""
+    data = base64.b64encode((_ASSETS / "icon-64.png").read_bytes()).decode()
+    return [Icon(src=f"data:image/png;base64,{data}", mime_type="image/png", sizes=["64x64"])]
+
+
+def hosted_icons(public_url: str) -> list[Icon]:
+    return [
+        Icon(src=f"{public_url}/icon-{size}.png", mime_type="image/png", sizes=[f"{size}x{size}"])
+        for size in _ICON_SIZES
+    ]
 
 
 def build_server(
@@ -154,7 +172,7 @@ def _load_service() -> LmsService:
 
 
 def run_server() -> None:
-    build_server(_load_service).run("stdio")
+    build_server(_load_service, icons=embedded_icons()).run("stdio")
 
 
 def build_http_server(
@@ -190,6 +208,7 @@ def build_http_server(
     server = build_server(
         current_service,
         remote=True,
+        icons=hosted_icons(config.public_url),
         auth_server_provider=provider,
         auth=AuthSettings(
             issuer_url=config.public_url,
@@ -212,6 +231,20 @@ def build_http_server(
     @server.custom_route("/healthz", methods=["GET"])
     async def health(_: Request) -> Response:
         return PlainTextResponse("ok")
+
+    def serve_asset(path: str, file_name: str, media_type: str) -> None:
+        data = (_ASSETS / file_name).read_bytes()
+
+        async def handler(_: Request) -> Response:
+            return Response(
+                data, media_type=media_type, headers={"Cache-Control": "public, max-age=86400"}
+            )
+
+        server.custom_route(path, methods=["GET"])(handler)
+
+    serve_asset("/favicon.ico", "favicon.ico", "image/x-icon")
+    for size in _ICON_SIZES:
+        serve_asset(f"/icon-{size}.png", f"icon-{size}.png", "image/png")
 
     return server
 
