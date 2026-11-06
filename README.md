@@ -1,5 +1,7 @@
 # lmstelkom-mcp
 
+Dibuat oleh **Bagus Ardin Prayoga**, Angkatan 24.
+
 MCP server untuk LMS Telkom University (Moodle). AI bisa melihat mata kuliah, deadline, dan materi, serta mengambil file LMS memakai akunmu sendiri.
 
 Ini proyek mahasiswa yang **tidak resmi** dan tidak berafiliasi dengan Telkom University atau CeLOE. Aturan akademik tetap tanggung jawab masing-masing pengguna.
@@ -157,3 +159,9 @@ Variabel environment mengalahkan nilai di `.env`.
 ```bash
 uv run pytest
 ```
+
+## Pembuat dan hak cipta
+
+Hak cipta © 2026 Bagus Ardin Prayoga, Angkatan 24.
+
+Proyek ini belum memakai lisensi open source, jadi memakai ulang atau menyebarkan kodenya perlu izin pembuat. Kalau kamu merujuk atau mengembangkan proyek ini, cantumkan nama pembuat dan tautan ke [repo aslinya](https://github.com/bagusardin25/mcp-lmstelkom).

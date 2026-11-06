@@ -2,6 +2,7 @@
 name = "lmstelkom-mcp"
 version = "0.1.0"
 description = "MCP server untuk LMS Telkom University (Moodle)"
+authors = [{ name = "Bagus Ardin Prayoga" }]
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

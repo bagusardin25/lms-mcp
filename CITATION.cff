@@ -1,0 +1,8 @@
+cff-version: 1.2.0
+message: "Kalau merujuk atau mengembangkan proyek ini, cantumkan nama pembuatnya."
+title: "lmstelkom-mcp"
+type: software
+authors:
+  - given-names: "Bagus Ardin"
+    family-names: "Prayoga"
+repository-code: "https://github.com/bagusardin25/mcp-lmstelkom"
