@@ -1,5 +1,7 @@
 # lmstelkom-mcp
 
+Bagus Ardin Prayoga
+
 MCP server untuk LMS Telkom University (Moodle). AI bisa melihat mata kuliah, deadline, dan materi, serta mengambil file LMS memakai akunmu sendiri.
 
 Ini proyek mahasiswa yang **tidak resmi** dan tidak berafiliasi dengan Telkom University atau CeLOE. Aturan akademik tetap tanggung jawab masing-masing pengguna.
