@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator
+from collections.abc import Callable, Iterable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 from urllib.parse import urlsplit
 
 import httpx
@@ -14,6 +15,14 @@ import httpx
 _FILE_PATH = "/webservice/pluginfile.php/"
 _PUBLIC_FILE_PATH = "/pluginfile.php/"
 _MAX_JSON_ERROR_BYTES = 64 * 1024
+# Cukup untuk mempercepat puluhan panggilan baca tanpa membebani LMS.
+MAX_PARALLEL_CALLS = 4
+
+_Item = TypeVar("_Item")
+_Result = TypeVar("_Result")
+# Fungsi yang mengubah data tidak diulang otomatis: kalau koneksi putus sebelum ada balasan,
+# perubahannya mungkin sudah terjadi.
+_WRITE_FUNCTIONS = {"mod_assign_save_submission", "mod_assign_submit_for_grading"}
 
 _RENEW_TOKEN = "Perbarui LMS_TOKEN di file .env, atau sambungkan ulang connector di aplikasi AI."
 _ERROR_HINTS = {
@@ -57,17 +66,25 @@ class MoodleClient:
             transport=transport,
         )
 
+    @property
+    def base_url(self) -> str:
+        return self._base_url
+
     def call(self, function: str, **params: Any) -> Any:
         # Token dikirim di body POST supaya tidak muncul di URL atau log.
-        response = self._http.post(
-            "/webservice/rest/server.php",
-            data={
-                "wstoken": self._token,
-                "wsfunction": function,
-                "moodlewsrestformat": "json",
-                **params,
-            },
-        )
+        data = {
+            "wstoken": self._token,
+            "wsfunction": function,
+            "moodlewsrestformat": "json",
+            **_flatten_params(params),
+        }
+        try:
+            response = self._http.post("/webservice/rest/server.php", data=data)
+        except httpx.RemoteProtocolError:
+            # LMS kadang menutup koneksi yang dipakai ulang tanpa memberi balasan.
+            if function in _WRITE_FUNCTIONS:
+                raise
+            response = self._http.post("/webservice/rest/server.php", data=data)
         response.raise_for_status()
 
         try:
@@ -139,6 +156,36 @@ class MoodleClient:
         finally:
             partial.unlink(missing_ok=True)
 
+    def appears_in(self, data: bytes) -> bool:
+        """True kalau isi file memuat token akun ini atau tautan token mobile."""
+        token = self._token.encode()
+        if token and token in data:
+            return True
+        return b"moodlemobile://token=" in data.lower()
+
+    def upload_draft_file(self, file_name: str, data: bytes) -> int:
+        """Mengunggah file ke area draft pengguna dan mengembalikan itemid-nya."""
+        response = self._http.post(
+            "/webservice/upload.php",
+            data={"token": self._token, "filearea": "draft", "itemid": 0},
+            files={"file_1": (file_name, data, "application/octet-stream")},
+            timeout=httpx.Timeout(30, write=120, read=120),
+        )
+        response.raise_for_status()
+        try:
+            payload = response.json()
+        except ValueError:
+            raise MoodleError(
+                "invalidresponse", "Respons LMS bukan JSON, mungkin sedang maintenance."
+            ) from None
+
+        _raise_for_moodle_error(payload)
+        if not isinstance(payload, list) or not payload:
+            raise MoodleError("uploadfailed", "LMS tidak mengembalikan data file.")
+        if payload[0].get("error"):
+            raise MoodleError(payload[0].get("errortype") or "uploadfailed", payload[0]["error"])
+        return payload[0]["itemid"]
+
     def read_bytes(self, url: str, max_bytes: int) -> bytes:
         """Mengambil isi file ke memori, tanpa menyimpannya ke disk."""
         with self._open_file(url, max_bytes) as (content_type, chunks):
@@ -146,6 +193,32 @@ class MoodleClient:
         if len(data) <= _MAX_JSON_ERROR_BYTES:
             _raise_for_error_body(data, content_type)
         return data
+
+
+def run_parallel(
+    function: Callable[[_Item], _Result], items: Iterable[_Item]
+) -> list[_Result]:
+    """Menjalankan panggilan baca bersamaan, misalnya status puluhan tugas, dengan urutan
+    hasil sama seperti urutan masukan. Jangan dipakai untuk panggilan yang mengubah data."""
+    items = list(items)
+    if len(items) <= 1:
+        return [function(item) for item in items]
+    with ThreadPoolExecutor(max_workers=MAX_PARALLEL_CALLS) as pool:
+        return list(pool.map(function, items))
+
+
+def _flatten_params(params: dict[Any, Any], prefix: str = "") -> dict[str, Any]:
+    """Moodle menerima array sebagai courseids[0]=1 dan plugindata[nama]=nilai."""
+    flat: dict[str, Any] = {}
+    for key, value in params.items():
+        name = f"{prefix}[{key}]" if prefix else str(key)
+        if isinstance(value, dict):
+            flat.update(_flatten_params(value, name))
+        elif isinstance(value, (list, tuple)):
+            flat.update(_flatten_params(dict(enumerate(value)), name))
+        else:
+            flat[name] = value
+    return flat
 
 
 def _limit_size(chunks: Iterator[bytes], max_bytes: int) -> Iterator[bytes]:
