@@ -6,15 +6,15 @@ import argparse
 import html
 import sys
 import time
-from datetime import datetime
 
 import httpx
 
-from .auth import TokenError
+from .auth import TokenError, token_page_url
 from .config import ConfigError, load_config
+from .deadlines import get_deadlines
 from .moodle import MoodleClient, MoodleError
 from .server import run_http_server, run_server
-from .service import WIB, create_client
+from .service import create_client
 
 DEADLINE_DAYS = 14
 
@@ -22,6 +22,7 @@ DEADLINE_DAYS = 14
 READ_FUNCTIONS = (
     "core_course_get_enrolled_courses_by_timeline_classification",
     "core_course_get_contents",
+    "core_course_get_courses_by_field",
     "core_calendar_get_action_events_by_timesort",
     "mod_assign_get_assignments",
     "mod_assign_get_submission_status",
@@ -54,23 +55,17 @@ def print_courses(client: MoodleClient) -> None:
 
 
 def print_deadlines(client: MoodleClient) -> None:
-    now = int(time.time())
-    events = client.call(
-        "core_calendar_get_action_events_by_timesort",
-        timesortfrom=now,
-        timesortto=now + DEADLINE_DAYS * 86400,
-        limitnum=20,
-    )["events"]
-
-    print(f"\nDeadline {DEADLINE_DAYS} hari ke depan: {len(events)}")
-    for event in events:
-        due = datetime.fromtimestamp(event["timesort"], WIB)
-        course = (event.get("course") or {}).get("fullname", "-")
-        name = event.get("activityname") or event["name"]
-        print(
-            f"  - {due:%d-%m-%Y %H:%M} WIB  "
-            f"[{html.unescape(course)}] {html.unescape(name)}"
-        )
+    result = get_deadlines(client, DEADLINE_DAYS, int(time.time()))
+    for title, key in (
+        (f"Deadline {DEADLINE_DAYS} hari ke depan", "upcoming"),
+        ("Lewat tenggat dan belum dikumpulkan", "overdue"),
+    ):
+        print(f"\n{title}: {len(result[key])}")
+        for item in result[key]:
+            print(
+                f"  - {item['date_text']}  [{item['course'] or '-'}] {item['name']}"
+                f"  ({item['status']}, {item['time_left']})"
+            )
 
 
 def format_upload_limit(size: int | None) -> str:
@@ -122,10 +117,21 @@ def cmd_check() -> int:
     return 1 if failed else 0
 
 
+def cmd_token() -> int:
+    print("Buka halaman ini di browser dan login kalau diminta:")
+    print(f"  {token_page_url(load_config().base_url)}")
+    print(
+        'Lalu klik kanan "Click here if the app does not open automatically", pilih '
+        '"Copy link address", dan tempel setelah LMS_TOKEN= di file .env.'
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="lms-mcp", description="MCP untuk LMS Telkom")
+    parser = argparse.ArgumentParser(prog="lms-mcp", description="MCP untuk LMS berbasis Moodle")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("check", help="uji akses ke API LMS")
+    commands.add_parser("token", help="tampilkan alamat halaman untuk mengambil token")
     serve = commands.add_parser("serve", help="jalankan MCP server")
     serve.add_argument(
         "--http", action="store_true", help="mode online lewat HTTP dengan login OAuth"
@@ -139,6 +145,8 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 run_server()
             return 0
+        if args.command == "token":
+            return cmd_token()
         return cmd_check()
     except ConfigError as error:
         print(f"Konfigurasi belum lengkap: {error}", file=sys.stderr)

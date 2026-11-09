@@ -1,9 +1,11 @@
+import time
+
 import pytest
 
-from lmstelkom_mcp import cli
-from lmstelkom_mcp.auth import TokenError
-from lmstelkom_mcp.config import Config, ConfigError
-from lmstelkom_mcp.moodle import MoodleError
+from lms_mcp import cli
+from lms_mcp.auth import TokenError
+from lms_mcp.config import Config, ConfigError
+from lms_mcp.moodle import MoodleError
 
 SITE_INFO = {
     "fullname": "Nama Mahasiswa",
@@ -22,20 +24,24 @@ SITE_INFO = {
 
 class FakeClient:
     def __init__(self):
+        soon = int(time.time()) + 3600
         self.responses = {
             "core_webservice_get_site_info": SITE_INFO,
             "core_course_get_enrolled_courses_by_timeline_classification": {
-                "courses": [{"fullname": "Basis Data &amp; SQL"}]
+                "courses": [{"id": 7, "fullname": "Basis Data &amp; SQL"}]
             },
+            "mod_assign_get_assignments": {"courses": []},
+            "mod_quiz_get_quizzes_by_courses": {"quizzes": []},
             "core_calendar_get_action_events_by_timesort": {
                 "events": [
                     {
                         "name": "Tugas 1 is due",
                         "activityname": "Tugas 1",
-                        "timesort": 1794000000,
+                        "timesort": soon,
                         "course": {"fullname": "Basis Data &amp; SQL"},
+                        "action": {"actionable": True},
                     },
-                    {"name": "Acara pribadi", "timesort": 1794000000, "course": None},
+                    {"name": "Acara pribadi", "timesort": soon, "course": None},
                 ]
             },
         }
@@ -59,7 +65,22 @@ def test_check_without_token_points_to_env_file(monkeypatch, capsys):
     monkeypatch.setattr(cli, "load_config", lambda: Config("https://x.test", None))
 
     assert cli.main(["check"]) == 1
-    assert ".env" in capsys.readouterr().err
+    error = capsys.readouterr().err
+    assert ".env" in error
+    assert "lms-mcp token" in error
+
+
+def test_token_prints_token_page_of_configured_lms(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "load_config", lambda: Config("https://lms.contoh.test", None))
+
+    assert cli.main(["token"]) == 0
+
+    output = capsys.readouterr().out
+    assert (
+        "https://lms.contoh.test/admin/tool/mobile/launch.php?service=moodle_mobile_app"
+        "&passport=1&urlscheme=moodlemobile&confirmed=1"
+    ) in output
+    assert "LMS_TOKEN=" in output
 
 
 def test_check_reports_broken_token(monkeypatch, capsys):
@@ -80,6 +101,8 @@ def test_check_prints_summary(capsys, fake_client):
     assert "Mata kuliah berjalan: 1" in output
     assert "Basis Data & SQL" in output
     assert "[Basis Data & SQL] Tugas 1" in output
+    assert "bisa_dikerjakan" in output
+    assert "Lewat tenggat dan belum dikumpulkan: 0" in output
     assert "WIB" in output
     assert "Acara pribadi" in output
     assert "[ada] core_course_get_contents" in output

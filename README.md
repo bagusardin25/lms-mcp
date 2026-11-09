@@ -1,165 +1,212 @@
-# lmstelkom-mcp
+# lms-mcp
 
 Bagus Ardin Prayoga
 
-Kita buat MCP server ini untuk LMS Telkom University (Moodle). Dengan server ini, kita bisa meminta AI melihat mata kuliah, deadline, dan materi, serta mengambil file LMS memakai akun kita sendiri.
+lms-mcp menghubungkan AI dengan LMS kampus kita. Lewat penghubung ini, kita bisa minta AI melihat mata kuliah, tenggat, dan materi, serta mengambil file, memakai akun kita sendiri.
 
-Kita membuatnya sebagai mahasiswa. Kita tidak berafiliasi dengan Telkom University atau CeLOE. Aturan akademik tetap tanggung jawab kita.
+Kita membuatnya sebagai mahasiswa, terpisah dari kampus dan pengelola LMS. Aturan kuliah tetap tanggung jawab kita.
 
-## Pilih mode
+## Pilih cara pakai
 
-| Kita memakai | Mode | Perlu deploy? |
+| Dipakai di | Cara | Perlu dipasang di internet? |
 |---|---|---|
-| Claude Code, Codex, Claude Desktop, Cursor, VS Code, Antigravity, AI lokal seperti LM Studio | Lokal (stdio) | Tidak |
-| claude.ai, ChatGPT, dan AI chat web lain yang mendukung custom MCP | Online (HTTP) | Ya |
+| Claude Code, Codex, Claude Desktop, Cursor, VS Code, Antigravity, atau AI di komputer seperti LM Studio | Di komputer kita | Tidak |
+| claude.ai, ChatGPT, dan chat AI di situs web | Lewat situs | Ya |
 
-Untuk akun kita sendiri, kita pakai mode lokal. Token tetap di komputer kita. Mode online hanya untuk AI yang berjalan di web, dan hanya di server yang kita percaya.
+Untuk akun kita sendiri, pakai cara di komputer. Kunci masuk tetap di komputer kita. Cara lewat situs hanya untuk AI yang dibuka di browser, dan hanya di server yang kita percaya.
 
-## Tool yang tersedia
+## Yang bisa diminta ke AI
 
-| Tool | Fungsi | Mode |
+Nama di kolom kiri adalah nama yang AI pakai. Kita cukup memintanya dengan bahasa biasa.
+
+| Nama | Kegunaan | Cara |
 |---|---|---|
-| `get_profile` | Profil dan izin unduh serta upload file | Keduanya |
-| `list_courses` | Mata kuliah berjalan, selesai, atau akan datang | Keduanya |
-| `get_upcoming_deadlines` | Aktivitas yang belum selesai dan jatuh tempo dalam sekian hari | Keduanya |
-| `get_course_materials` | Isi mata kuliah per bagian: aktivitas, file, dan link luar | Keduanya |
-| `read_file_text` | Membaca teks file per halaman, untuk merangkum atau menjawab pertanyaan | Keduanya |
-| `get_file_link` | Membuat tautan file untuk dibuka di browser | Keduanya |
-| `download_file` | Mengunduh file LMS ke komputer kita, maksimal 200 MB | Lokal |
+| `get_profile` | Siapa kita, dan apakah akun ini boleh mengunduh atau mengunggah file | Keduanya |
+| `list_courses` | Daftar mata kuliah: yang sedang berjalan, yang sudah selesai, dan yang akan datang | Keduanya |
+| `get_upcoming_deadlines` | Tenggat beberapa hari ke depan di semua mata kuliah, plus tugas yang terlambat dan belum dikumpulkan | Keduanya |
+| `get_course_materials` | Isi satu mata kuliah per bagian: kegiatan, file, dan tautan luar | Keduanya |
+| `read_file_text` | Membaca tulisan di dalam file, per halaman, supaya AI bisa merangkum atau menjawab pertanyaan | Keduanya |
+| `get_file_link` | Membuat tautan supaya file dibuka di browser | Keduanya |
+| `list_assignments` | Daftar tugas di satu mata kuliah, lengkap dengan tenggat, status, dan nilai | Keduanya |
+| `get_assignment` | Detail satu tugas: perintah dosen, aturan file, yang sudah dikirim, dan komentar dosen | Keduanya |
+| `download_file` | Mengunduh file ke komputer kita setelah kita menekan tombol di browser. Paling besar 200 MB | Di komputer |
 
-Semua tool hanya membaca data LMS, jadi kita belum bisa mengumpulkan tugas atau mengirim pesan lewat server ini. Ini sengaja. Mengumpulkan tugas lewat AI mudah terjadi tanpa kita sengaja, dan aksinya tercatat di LMS atas nama akun kita.
+Setiap jawaban yang ada tanggalnya juga menyertakan jam sekarang, tanggal lengkap dengan nama hari, dan sisa waktunya. AI jadi tidak perlu menebak hari ini atau menghitung sendiri, karena tebakan itu sering meleset. Tugas sisa salinan semester lalu, yang tenggatnya jauh sebelum mata kuliah dimulai, dipisahkan supaya tidak terlihat seperti tugas yang belum dikumpulkan. Daftar tenggat juga memeriksa tugas dan kuis yang tidak muncul di kalender karena sudah ditandai selesai, serta draf yang sudah diunggah tetapi belum dikirim ke dosen.
+
+Secara bawaan, AI hanya boleh melihat. Mengumpulkan tugas dimatikan sampai kita menyalakannya sendiri, karena tugas gampang terkirim tanpa kita sadari, dan LMS mencatatnya atas nama kita. Mengirim pesan dan menulis di forum belum bisa.
+
+### Mengumpulkan tugas
+
+Fitur ini baru dicoba di LMS tiruan. Coba dulu di tugas latihan, bukan tugas yang dinilai. Untuk menyalakannya, isi `LMS_ENABLE_WRITE=1` di file pengaturan.
+
+| Cara | Nama | Yang terjadi |
+|---|---|---|
+| Di komputer | `save_assignment_file`, `submit_assignment` | Halaman terbuka di browser. Kita yang menekan tombol |
+| Lewat situs | `create_upload_link` | AI memberi tautan. Kita sendiri yang memilih file dan menekan tombol |
+
+- **AI tidak menekan tombolnya sendiri.** Di komputer, halaman konfirmasi terbuka di browser. Halaman itu menampilkan mata kuliah, bagian, tugas, tenggat, dan file. Tidak ada yang terunggah sebelum kita menekan tombol.
+- **Banyak tugas langsung terkumpul begitu file disimpan.** Tugas seperti ini tidak punya tahap simpan dulu. Halaman konfirmasi minta kita mencentang sebelum lanjut.
+- **File lama tidak diganti diam-diam.** Kalau tugas sudah berisi file, halaman yang sama minta centang untuk menggantinya.
+- **Di komputer, file tugas hanya boleh diambil dari tempat yang aman.** Tempatnya folder Dokumen, Unduhan, dan Desktop, kecuali kita mengubah `LMS_UPLOAD_DIRS`. File rahasia seperti `.env`, kunci masuk komputer, dan `credentials.json` ditolak. File yang di dalamnya ada kunci masuk LMS juga ditolak.
+- **File yang baru diunduh dari LMS tidak bisa langsung dikumpulkan.** Salin dulu ke folder lain kalau memang itu tugas kita.
+- **Lewat situs, tautan unggah berlaku 15 menit dan sekali pakai.** File diteruskan ke LMS dan tidak disimpan di server.
+- **Isi tugas tetap tanggung jawab kita.** Yang diunggah hanya file yang kita pilih.
+
+### Konfirmasi di browser
+
+Mengunduh file, menyimpan file tugas, dan mengirim tugas ke dosen tidak langsung dijalankan AI. Di komputer, halaman terbuka di browser dan menunggu paling lama 3 menit. Halaman itu menampilkan mata kuliah, bagian (misalnya Minggu 3), kegiatan, dan berkasnya, sesuai yang tertulis di LMS. Tombolnya hanya bisa kita tekan. Kalau ditolak atau waktunya habis, tidak ada yang diunduh atau dikumpulkan.
+
+Lewat situs, file tidak diunduh ke komputer. Mengumpulkan tugas tetap lewat halaman unggah, dan halaman itu juga menampilkan mata kuliah serta bagiannya.
 
 ### Batasan membaca file
 
-`read_file_text` mendukung PDF, PPTX, DOCX, TXT, MD, CSV, dan HTML sampai 50 MB, tanpa menyimpan file di server.
+`read_file_text` bisa membaca PDF, PowerPoint (PPTX), Word (DOCX), teks biasa, Markdown, CSV, dan HTML, sampai 50 MB. File tidak disimpan di server.
 
-- **File di Office 365 tidak bisa kita baca.** Dosen bisa menaruh materi di Office 365 lalu menautkannya ke LMS, dan Moodle menolak mengirim file seperti ini lewat token. File ini kita tandai `stored_outside_lms`. Kita buka lewat `get_file_link` di browser, lalu kita unggah filenya ke AI kalau isinya perlu kita baca.
-- **Gambar tidak terbaca.** PDF hasil scan hampir tidak menghasilkan teks, dan gambar serta diagram di slide tidak ikut.
-- **Format lain belum kita dukung,** termasuk XLSX, PPT, dan DOC versi lama.
+- **File di Office 365 tidak bisa dibaca dari sini.** Dosen kadang menaruh materi di Office 365 lalu menautkannya ke LMS. LMS menolak mengirim file seperti itu. File ini ditandai tersimpan di luar LMS. Buka lewat `get_file_link` di browser, lalu unggah sendiri ke AI kalau isinya perlu dibaca.
+- **Gambar tidak terbaca.** PDF hasil scan hampir tidak punya tulisan. Gambar dan diagram di slide tidak ikut.
+- **Beberapa format lama belum bisa,** termasuk Excel, PowerPoint lama (PPT), dan Word lama (DOC).
+- **File yang bisa dijalankan tidak diunduh,** termasuk `.exe`, skrip, dan halaman `.html`. Buka lewat `get_file_link` kalau memang perlu.
 
-## Ambil token
+## Ambil kunci masuk
 
-LMS kita hanya bisa login lewat Office365, jadi kita ambil token lewat alur SSO aplikasi mobile Moodle.
+LMS kita hanya bisa masuk lewat Office 365, jadi kunci masuknya kita ambil dari halaman yang biasa dipakai aplikasi HP Moodle.
 
-1. Kita buka [halaman token](https://lms.telkomuniversity.ac.id/admin/tool/mobile/launch.php?service=moodle_mobile_app&passport=1&urlscheme=moodlemobile&confirmed=1), lalu login kalau diminta.
-2. Kita klik kanan tautan "Click here if the app does not open automatically", lalu pilih "Copy link address".
+1. Buka halaman kunci masuk LMS, lalu masuk kalau diminta. Di komputer, alamatnya muncul setelah menjalankan `uv run lms-mcp token` (lihat [Pakai di komputer](#pakai-di-komputer)). Lewat situs, halaman masuk server sudah menautkannya.
+2. Klik kanan tautan "Click here if the app does not open automatically", lalu pilih "Copy link address".
 
-Tautan harus sama persis sampai ke tiap huruf, jadi jangan kita ketik ulang atau kita baca dari gambar. Kalau ditolak, kita tekan `F12` di halaman token, lalu jalankan ini di tab Console untuk menyalinnya:
+Tautan itu harus sama persis, huruf demi huruf. Jangan diketik ulang dan jangan disalin dari gambar. Kalau ditolak, tekan `F12` di halaman itu, buka tab Console, lalu tempel perintah ini:
 
 ```
 copy(document.getElementById('launchapp').href)
 ```
 
-Token ini setara akses penuh ke akun LMS kita, jadi jangan kita bagikan atau kita kirim ke chat AI, termasuk lewat screenshot.
+Kunci masuk ini sama saja dengan membuka akun LMS kita. Jangan dibagikan, jangan ditempel ke chat AI, dan jangan ikut di tangkapan layar.
 
-Token punya masa berlaku yang diatur admin LMS, dengan default Moodle 12 minggu. Kalau sudah habis, tool membalas error `accessexception` atau `invalidtoken`, lalu kita ulangi langkah di atas.
+Kunci ini punya masa berlaku yang diatur pengelola LMS. Bawaannya sekitar 12 minggu. Kalau sudah habis, AI membalas bahwa akses ditolak (`accessexception` atau `invalidtoken`). Ulangi langkah di atas.
 
-## Mode lokal
+## Pakai di komputer
 
-Kita butuh [uv](https://docs.astral.sh/uv/).
+Kita butuh [uv](https://docs.astral.sh/uv/), program untuk memasang proyek ini.
 
 ```bash
-git clone https://github.com/bagusardin25/mcp-lmstelkom.git
-cd mcp-lmstelkom
+git clone https://github.com/bagusardin25/lms-mcp.git
+cd lms-mcp
 uv sync
 ```
 
-Kita salin `.env.example` menjadi `.env`, lalu tempel tautan token setelah `LMS_TOKEN=`. File `.env` tidak kita ikutkan di commit. Setelah itu kita uji aksesnya:
+Salin `.env.example` menjadi `.env`. Alamat halaman kunci masuk muncul dengan perintah di bawah. Simpan tautannya di luar folder proyek, misalnya di `~/.lms-mcp/token`, lalu isi lokasinya di `LMS_TOKEN_FILE`. Kalau `LMS_TOKEN` juga diisi, yang itu yang dipakai. Jangan tempel tautan itu ke chat AI, dan jangan bagikan chat yang sempat memuatnya. Kalau chat itu sudah terkirim, reset kunci di halaman Security keys LMS.
+
+```bash
+uv run lms-mcp token
+```
+
+File `.env` tidak ikut saat proyek ini diunggah ke GitHub. Setelah kunci masuk terisi, cek apakah LMS bisa dibuka:
 
 ```bash
 uv run lms-mcp check
 ```
 
-Kita ganti `/path/ke/mcp-lmstelkom` dengan lokasi folder proyek ini.
+Ganti `/path/ke/lms-mcp` dengan lokasi folder proyek ini di komputer kita.
 
 **Claude Code**
 
 ```bash
-claude mcp add lms-telkom -- uv run --directory /path/ke/mcp-lmstelkom lms-mcp serve
+claude mcp add lms-mcp -- uv run --directory /path/ke/lms-mcp lms-mcp serve
 ```
 
 **Codex**
 
 ```bash
-codex mcp add lms-telkom -- uv run --directory /path/ke/mcp-lmstelkom lms-mcp serve
+codex mcp add lms-mcp -- uv run --directory /path/ke/lms-mcp lms-mcp serve
 ```
 
-**Claude Desktop, Cursor, Antigravity, LM Studio, dan client lain yang memakai format `mcpServers`**
+**Claude Desktop, Cursor, Antigravity, LM Studio, dan aplikasi lain yang memakai format `mcpServers`**
 
 ```json
 {
   "mcpServers": {
-    "lms-telkom": {
+    "lms-mcp": {
       "command": "uv",
-      "args": ["run", "--directory", "/path/ke/mcp-lmstelkom", "lms-mcp", "serve"]
+      "args": ["run", "--directory", "/path/ke/lms-mcp", "lms-mcp", "serve"]
     }
   }
 }
 ```
 
-VS Code memakai format yang mirip di `mcp.json`, tapi kuncinya `servers`, bukan `mcpServers`.
+VS Code memakai format yang mirip di `mcp.json`, tetapi kuncinya `servers`.
 
-Kalau `uv` tidak ditemukan oleh aplikasinya, kita isi `command` dengan lokasi lengkap `uv`.
+Kalau aplikasinya tidak menemukan `uv`, isi `command` dengan lokasi lengkap program `uv` di komputer kita.
 
-## Mode online
+## Pakai lewat situs
 
-### Deploy
+### Pasang di internet
 
-Di repo ini ada `Dockerfile`, jadi kita bisa menjalankannya di hosting apa pun yang mendukung container. `railway.json` sudah kita siapkan untuk Railway.
+Di proyek ini sudah ada berkas untuk memasangnya di layanan seperti Railway. Server tidur sendiri setelah sekitar 5–10 menit tidak dipakai, jadi biayanya hampir nol saat menganggur. Saat ada yang memakai lagi, permintaan pertama butuh beberapa detik, dan sesekali gagal. Ulangi saja permintaan itu ke AI.
 
-Kita isi variabel ini di pengaturan hosting:
+Isi pengaturan ini di layanan hosting:
 
-| Variabel | Keterangan |
+| Nama | Artinya |
 |---|---|
-| `LMS_PUBLIC_URL` | Alamat publik server, contoh `https://nama-server.up.railway.app` |
-| `LMS_SERVER_SECRET` | Kunci enkripsi acak, minimal 32 karakter |
-| `LMS_EXTRA_REDIRECT_HOSTS` | Opsional, host klien tambahan yang kita izinkan, dipisah koma |
+| `LMS_PUBLIC_URL` | Alamat server yang bisa dibuka orang, contoh `https://nama-server.up.railway.app` |
+| `LMS_SERVER_SECRET` | Kata sandi rahasia server, minimal 32 huruf. Jangan diubah sembarangan, karena semua yang sudah tersambung harus masuk lagi |
+| `LMS_EXTRA_REDIRECT_HOSTS` | Opsional. Alamat situs AI lain yang boleh disambungkan, dipisah koma. claude.ai dan ChatGPT sudah diizinkan |
+| `LMS_ENABLE_WRITE` | Opsional. Isi `1` untuk menyalakan halaman unggah tugas |
+| `LMS_TOKEN_GENERATION` | Opsional, mulai dari `0`. Naikkan angkanya lalu nyalakan ulang server untuk memutus semua yang sudah masuk |
 
-Kita buat `LMS_SERVER_SECRET` dengan perintah ini, dan jangan pernah kita ubah tanpa alasan, karena kita yang sudah tersambung akan perlu login ulang:
+Kata sandi rahasia server bisa dibuat dengan perintah ini:
 
 ```bash
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-Jangan kita isi `LMS_TOKEN` di hosting, karena mode online tidak memakainya.
+Jangan isi `LMS_TOKEN` di hosting. Cara lewat situs tidak memakainya.
 
-### Sambungkan ke AI chat
+### Sambungkan ke chat AI
 
-Alamat connector kita adalah `LMS_PUBLIC_URL` ditambah `/mcp`.
+Alamat yang ditempel ke AI adalah `LMS_PUBLIC_URL` ditambah `/mcp`.
 
-- **claude.ai:** kita buka Settings, Connectors, lalu Add custom connector.
-- **ChatGPT:** kita aktifkan Developer Mode, lalu tambahkan connector di pengaturan Apps & Connectors. Ketersediaannya tergantung paket.
-- **AI chat lain:** kita tambahkan host callback-nya ke `LMS_EXTRA_REDIRECT_HOSTS`. Hanya claude.ai dan ChatGPT yang kita izinkan secara default.
+- **claude.ai:** buka Settings, Connectors, lalu Add custom connector.
+- **ChatGPT:** nyalakan Developer Mode, lalu tambahkan di pengaturan Apps & Connectors. Tidak semua paket memilikinya.
+- **Chat AI lain:** tambahkan alamat situsnya ke `LMS_EXTRA_REDIRECT_HOSTS`.
 
-Saat kita menyambungkan, muncul halaman login server ini. Kita tempel tautan token di sana.
+Saat menyambungkan, muncul halaman masuk. Tempel tautan kunci masuk di sana.
 
-### Cara kerja login
+### Cara masuknya
 
-Server ini tidak kita beri database. Token LMS kita enkripsi dan simpan di dalam access token yang dipegang aplikasi AI, dan hanya server yang bisa membukanya. Karena itu tiap akun tetap memakai tokennya sendiri.
+Server ini tidak menyimpan daftar akun. Kunci masuk LMS dikunci dan disimpan di dalam izin yang dipegang aplikasi AI. Hanya server ini yang bisa membukanya, jadi tiap orang tetap memakai kunci masuknya sendiri.
 
-Kita yang menjalankan server secara teknis bisa membaca token yang lewat. Karena itu kita tempel token hanya di server yang kita percaya, atau kita pakai mode lokal. Untuk memutus akses sepenuhnya, kita reset token di halaman Security keys LMS.
+Orang yang menjalankan server ini bisa melihat kunci masuk saat kita menempelkannya. Tempel hanya di server yang kita percaya, atau pakai cara di komputer. Untuk memutus akses sepenuhnya, reset kunci di halaman Security keys LMS.
 
-## Keamanan
+Kalau server dimatikan lalu dinyalakan lagi, pemutusan yang baru saja dilakukan bisa hilang. Jalankan satu server saja. Untuk memutus semua yang masih tersambung di aplikasi AI, naikkan `LMS_TOKEN_GENERATION` lalu nyalakan ulang. Halaman masuk menampilkan alamat lengkap yang menerima izin, dan memperingatkan kalau alamat itu ada di komputer kita. Kalau pengumpulan tugas menyala, halaman itu juga mengatakannya.
 
-- Isi LMS bisa ditulis siapa saja di kelas kita, termasuk teks yang mencoba memberi perintah ke AI. Kita periksa dulu aksi AI sebelum menyetujuinya.
-- Data LMS yang kita baca lewat AI ikut terkirim ke penyedia model AI, kecuali kalau kita memakai model lokal.
-- Token hanya kita kirim ke LMS, dan URL unduhan ke server lain kita tolak.
-- Semua aksi tercatat di log LMS atas nama akun kita.
+## Hal yang perlu dijaga
 
-## Konfigurasi mode lokal
+- Isi LMS bisa ditulis siapa saja di kelas, termasuk kalimat yang mencoba menyuruh AI. Baca dulu sebelum menyetujui apa yang AI mau lakukan.
+- Data LMS yang dibaca AI ikut terkirim ke perusahaan pembuat AI itu, kecuali AI-nya berjalan di komputer kita.
+- Kunci masuk hanya dikirim ke LMS. Tautan unduhan dari situs lain ditolak.
+- Semua yang kita lakukan tercatat di LMS atas nama akun kita.
+- Unduh, unggah, kirim tugas, dan pembuatan tautan unggah juga dicatat di `~/.lms-mcp/audit.log`. Lokasinya bisa diganti lewat `LMS_AUDIT_LOG`. Catatan itu hanya memuat waktu, apa yang dilakukan, berhasil atau tidak, dan nama mata kuliah atau tugas. Kunci masuk dan isi file tidak ikut.
+- Cukup sambungkan ke satu AI di komputer kita. AI yang bisa membuka folder proyek bisa membaca file pengaturan, jadi simpan kunci masuk lewat `LMS_TOKEN_FILE` di luar folder proyek, dan tambahkan `.env` ke `.cursorignore` sendiri.
+- Orang yang memegang `LMS_SERVER_SECRET` tetap bisa membuka kunci masuk yang lewat di server. Kalau servernya lebih dari satu, pemutusan login tidak selalu sampai ke semuanya. Naikkan `LMS_TOKEN_GENERATION` untuk memutus semua sekaligus.
 
-| Variabel | Keterangan |
+## Pengaturan di komputer
+
+| Nama | Artinya |
 |---|---|
-| `LMS_TOKEN` | Tautan `moodlemobile://token=...` atau token web service |
-| `LMS_DOWNLOAD_DIR` | Opsional, default folder `Downloads/lms-telkom` |
-| `LMS_BASE_URL` | Opsional, default `https://lms.telkomuniversity.ac.id` |
+| `LMS_TOKEN` | Tautan kunci masuk. Kalau diisi, ini yang dipakai |
+| `LMS_TOKEN_FILE` | Opsional. Lokasi file kunci masuk di luar folder proyek, dipakai kalau `LMS_TOKEN` kosong |
+| `LMS_DOWNLOAD_DIR` | Opsional. Folder tujuan unduhan. Bawaannya `Downloads/lms-mcp` |
+| `LMS_AUDIT_LOG` | Opsional. Lokasi catatan. Bawaannya `~/.lms-mcp/audit.log` |
+| `LMS_ENABLE_WRITE` | Opsional. Isi `1` untuk menyalakan pengumpulan tugas |
+| `LMS_UPLOAD_DIRS` | Opsional. Folder asal file tugas, dipisah koma. Bawaannya Dokumen, Unduhan, dan Desktop |
+| `LMS_BASE_URL` | Opsional. Alamat LMS. Kalau kosong, yang dipakai alamat LMS kampus kita |
 
-Variabel environment mengalahkan nilai yang kita tulis di `.env`.
+Kalau nama yang sama juga diisi di pengaturan komputer, yang di komputer yang dipakai.
 
-## Tes
+## Memeriksa proyek
 
 ```bash
 uv run pytest
 ```
 
-Perintah yang sama juga kita jalankan di GitHub pada setiap push dan pull request.
+Perintah yang sama juga jalan di GitHub setiap ada perubahan yang diunggah.

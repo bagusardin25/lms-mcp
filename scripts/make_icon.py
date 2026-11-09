@@ -9,7 +9,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 CANVAS = 2048
-OUTPUT = Path(__file__).resolve().parents[1] / "src" / "lmstelkom_mcp" / "assets"
+OUTPUT = Path(__file__).resolve().parents[1] / "src" / "lms_mcp" / "assets"
 
 BACKGROUND = (15, 76, 92, 255)
 PAGE = (248, 250, 252, 255)

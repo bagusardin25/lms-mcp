@@ -2,7 +2,7 @@ import base64
 
 import pytest
 
-from lmstelkom_mcp.auth import TokenError, token_from_env
+from lms_mcp.auth import TokenError, token_from_env
 
 SIGNATURE = "a" * 32
 TOKEN = "f" * 32
@@ -23,7 +23,7 @@ VALID = encode(f"{SIGNATURE}:::{TOKEN}:::rahasia")
         f"  moodlemobile://token={VALID}  \n",
         f"Failed to launch 'moodlemobile://token={VALID}' because the scheme "
         "does not have a registered handler.",
-        f"celoestudent://token={VALID}",
+        f"aplikasikampus://token={VALID}",
         f"token={VALID}",
         "moodlemobile://token=" + VALID.replace("=", "%3D"),
         "moodlemobile://token=" + VALID.rstrip("="),

@@ -9,11 +9,11 @@ import httpx
 import pytest
 from starlette.testclient import TestClient
 
-from lmstelkom_mcp import oauth
-from lmstelkom_mcp.config import ConfigError, HttpConfig, load_http_config
-from lmstelkom_mcp.moodle import MoodleClient
-from lmstelkom_mcp.oauth import Sealer
-from lmstelkom_mcp.server import build_http_server, http_transport_options
+from lms_mcp import oauth
+from lms_mcp.config import ConfigError, HttpConfig, load_http_config
+from lms_mcp.moodle import MoodleClient
+from lms_mcp.oauth import Sealer
+from lms_mcp.server import build_http_server, http_transport_options
 
 PUBLIC_URL = "https://mcp.contoh.test"
 LMS_URL = "https://lms.contoh.test"
@@ -403,6 +403,8 @@ def test_remote_tools_replace_download_with_link(client):
         "get_upcoming_deadlines",
         "get_course_materials",
         "read_file_text",
+        "list_assignments",
+        "get_assignment",
         "get_file_link",
     }
 
@@ -492,6 +494,16 @@ def test_refresh_issues_working_access_token(client):
     result = call_tool(client, response.json()["access_token"], "get_profile")
     assert "Ani" in result["content"][0]["text"]
 
+    again = client.post(
+        "/token",
+        data={
+            "grant_type": "refresh_token",
+            "client_id": client_id,
+            "refresh_token": tokens["refresh_token"],
+        },
+    )
+    assert again.status_code != 200
+
 
 def test_revoked_token_stops_working(client):
     client_id, tokens = sign_in(client)
@@ -524,7 +536,13 @@ def test_sealer_rejects_wrong_kind():
 
 
 def test_http_config_requires_url_and_strong_secret(tmp_path, monkeypatch):
-    for name in ("LMS_PUBLIC_URL", "LMS_SERVER_SECRET", "PORT", "LMS_EXTRA_REDIRECT_HOSTS"):
+    for name in (
+        "LMS_PUBLIC_URL",
+        "LMS_SERVER_SECRET",
+        "PORT",
+        "LMS_EXTRA_REDIRECT_HOSTS",
+        "LMS_TOKEN_GENERATION",
+    ):
         monkeypatch.delenv(name, raising=False)
     env_path = tmp_path / ".env"
 
@@ -543,6 +561,20 @@ def test_http_config_requires_url_and_strong_secret(tmp_path, monkeypatch):
     assert config.public_url == "https://mcp.contoh.test"
     assert config.port == 9000
     assert config.extra_redirect_hosts == {"a.test", "b.test"}
+    assert config.token_generation == 0
+
+    env_path.write_text(
+        f"LMS_PUBLIC_URL=https://mcp.contoh.test/\nLMS_SERVER_SECRET={SECRET}\n"
+        "LMS_TOKEN_GENERATION=2\n"
+    )
+    assert load_http_config(env_path).token_generation == 2
+
+    env_path.write_text(
+        f"LMS_PUBLIC_URL=https://mcp.contoh.test/\nLMS_SERVER_SECRET={SECRET}\n"
+        "LMS_TOKEN_GENERATION=baru\n"
+    )
+    with pytest.raises(ConfigError):
+        load_http_config(env_path)
 
 
 @pytest.mark.parametrize(
@@ -591,3 +623,70 @@ def test_login_page_can_show_its_own_icon_only(client):
     assert 'src="/icon-64.png"' in response.text
     assert 'href="/favicon.ico"' in response.text
     assert "img-src 'self'" in response.headers["content-security-policy"]
+
+
+def test_login_page_title_shows_client_name_once_escaped(client):
+    client_id = register(client, client_name="A & B").json()["client_id"]
+
+    page = client.get("/login", params={"request": login_request(client, client_id)}).text
+
+    assert "<title>Hubungkan LMS ke A &amp; B</title>" in page
+    assert "&amp;amp;" not in page
+
+
+def test_login_page_is_clear_about_who_gets_access_and_status(client):
+    client_id = register(client).json()["client_id"]
+
+    page = client.get("/login", params={"request": login_request(client, client_id)}).text
+
+    assert "Hubungkan LMS ke Claude" in page
+    assert "<code>claude.ai</code>" in page
+    assert REDIRECT in page
+    assert "hanya membaca" in page
+    assert "Tidak resmi" in page
+    assert "tidak berafiliasi" in page
+    assert '<label for="lms_link">' in page
+    assert "<script" not in page
+
+
+def test_login_page_warns_about_loopback_and_write_mode():
+    redirect = "http://127.0.0.1:9/callback"
+    config = HttpConfig(LMS_URL, PUBLIC_URL, SECRET, enable_write=True)
+    with TestClient(make_app(config), base_url=PUBLIC_URL, follow_redirects=False) as client:
+        client_id = register(client, redirect=redirect).json()["client_id"]
+        started = authorize(client, client_id, redirect=redirect)
+        request = parse_qs(urlsplit(started.headers["location"]).query)["request"][0]
+        page = client.get("/login", params={"request": request}).text
+
+    assert redirect in page
+    assert "komputermu sendiri" in page
+    assert "mengizinkan pengumpulan tugas" in page
+    assert "hanya membaca" not in page
+
+
+def test_old_token_dies_when_generation_changes():
+    config = HttpConfig(LMS_URL, PUBLIC_URL, SECRET, token_generation=1)
+    with TestClient(make_app(config), base_url=PUBLIC_URL, follow_redirects=False) as client:
+        _, tokens = sign_in(client)
+        assert mcp(client, "tools/list", access_token=tokens["access_token"]).status_code == 200
+        stale = Sealer(SECRET).seal(
+            "access",
+            {
+                "client_id": "x",
+                "scopes": ["lms"],
+                "resource": None,
+                "subject": "1",
+                "lms_token": TOKEN_ANI,
+                "gen": 0,
+                "exp": 9999999999,
+            },
+        )
+        assert mcp(client, "tools/list", access_token=stale).status_code == 401
+
+
+def test_expired_login_page_explains_next_step(client):
+    response = client.get("/login", params={"request": "palsu"})
+
+    assert response.status_code == 400
+    assert "Ulangi dari aplikasi AI" in response.text
+    assert "Tidak resmi" in response.text

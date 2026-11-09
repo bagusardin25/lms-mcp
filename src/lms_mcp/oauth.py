@@ -10,14 +10,13 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import html
 import json
 import secrets
 import time
 import zlib
 from collections import deque
 from typing import Any, Callable
-from urllib.parse import quote, urlencode, urlsplit
+from urllib.parse import quote, urlsplit
 
 import anyio
 import httpx
@@ -35,8 +34,9 @@ from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
 
-from .auth import TokenError, token_from_env
+from .auth import TokenError, token_from_env, token_page_url
 from .moodle import MoodleError
+from .pages import login_page, message_page
 
 SCOPE = "lms"
 VALID_SCOPES = [SCOPE, "offline_access"]
@@ -54,7 +54,7 @@ _LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 # korban menempelkan token, dan kode otorisasinya terkirim ke penyerang.
 _DEFAULT_REDIRECT_HOSTS = {"claude.ai", "claude.com", "chatgpt.com", "chat.openai.com"}
 
-_SECURITY_HEADERS = {
+SECURITY_HEADERS = {
     "Cache-Control": "no-store",
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
@@ -90,7 +90,7 @@ class Sealer:
         return payload
 
 
-class _RateLimiter:
+class RateLimiter:
     def __init__(self, limit: int, seconds: float) -> None:
         self._limit = limit
         self._seconds = seconds
@@ -131,15 +131,19 @@ class LmsOAuthProvider:
         lms_url: str,
         verify_lms_token: Callable[[str], dict[str, Any]],
         extra_redirect_hosts: frozenset[str] = frozenset(),
+        enable_write: bool = False,
+        token_generation: int = 0,
     ) -> None:
         self._sealer = sealer
         self._public_url = public_url
         self._lms_url = lms_url
         self._verify_lms_token = verify_lms_token
         self._redirect_hosts = _DEFAULT_REDIRECT_HOSTS | extra_redirect_hosts
-        self._login_limiter = _RateLimiter(LOGIN_ATTEMPTS_PER_MINUTE, 60)
-        # Hanya di memori: setelah restart, kode dan token yang dicabut kembali ke masa
-        # berlakunya masing-masing. Untuk memutus akses total, reset token di LMS.
+        self._enable_write = enable_write
+        self._generation = token_generation
+        self._login_limiter = RateLimiter(LOGIN_ATTEMPTS_PER_MINUTE, 60)
+        # Pencabutan hanya hidup di memori proses ini. Setelah restart, token lama
+        # berlaku lagi sampai LMS_TOKEN_GENERATION dinaikkan, atau token direset di LMS.
         self._used_codes: dict[str, float] = {}
         self._revoked_tokens: dict[str, float] = {}
 
@@ -243,42 +247,34 @@ class LmsOAuthProvider:
                 "scopes": data["scopes"],
                 "code_challenge": data["code_challenge"],
                 "resource": data["resource"],
+                "gen": self._generation,
                 "exp": int(time.time()) + CODE_SECONDS,
             },
         )
         return RedirectResponse(
             construct_redirect_uri(data["redirect_uri"], code=code, state=data["state"]),
             status_code=303,
-            headers=_SECURITY_HEADERS,
+            headers=SECURITY_HEADERS,
         )
 
     def _render_login(
         self, sealed: str, data: dict[str, Any], error: str = "", status: int = 200
     ) -> Response:
-        token_page = (
-            f"{self._lms_url}/admin/tool/mobile/launch.php?"
-            + urlencode(
-                {
-                    "service": "moodle_mobile_app",
-                    "passport": "1",
-                    "urlscheme": "moodlemobile",
-                    "confirmed": "1",
-                }
-            )
-        )
-        target = urlsplit(data["redirect_uri"]).hostname or ""
-        client_name = data.get("client_name") or "Aplikasi tanpa nama"
-        error_block = f'<p class="error" role="alert">{html.escape(error)}</p>' if error else ""
+        redirect_uri = data["redirect_uri"]
+        host = urlsplit(redirect_uri).hostname or ""
         return HTMLResponse(
-            _LOGIN_TEMPLATE.format(
-                client=html.escape(client_name),
-                target=html.escape(target),
-                token_page=html.escape(token_page, quote=True),
-                error=error_block,
-                request=html.escape(sealed, quote=True),
+            login_page(
+                client=data.get("client_name") or "Aplikasi tanpa nama",
+                target=host,
+                redirect_uri=redirect_uri,
+                loopback=host in _LOOPBACK_HOSTS,
+                writes=self._enable_write,
+                token_page=token_page_url(self._lms_url),
+                request=sealed,
+                error=error,
             ),
             status_code=status,
-            headers=_SECURITY_HEADERS,
+            headers=SECURITY_HEADERS,
         )
 
     # Kode otorisasi
@@ -288,6 +284,8 @@ class LmsOAuthProvider:
     ) -> LmsAuthorizationCode | None:
         data = self._sealer.unseal("code", authorization_code)
         if data is None or data["client_id"] != client.client_id:
+            return None
+        if int(data.get("gen", 0)) != self._generation:
             return None
         self._forget_expired(self._used_codes)
         if data["code_id"] in self._used_codes:
@@ -338,6 +336,7 @@ class LmsOAuthProvider:
             "resource": resource,
             "subject": subject,
             "lms_token": lms_token,
+            "gen": self._generation,
         }
         return OAuthToken(
             access_token=self._sealer.seal(
@@ -387,6 +386,8 @@ class LmsOAuthProvider:
         refresh_token: LmsRefreshToken,
         scopes: list[str],
     ) -> OAuthToken:
+        # Refresh yang sudah dipakai tidak boleh dipakai lagi di proses ini.
+        await self.revoke_token(refresh_token)
         return self._issue_tokens(
             client_id=refresh_token.client_id,
             scopes=scopes or refresh_token.scopes,
@@ -407,7 +408,10 @@ class LmsOAuthProvider:
         self._forget_expired(self._revoked_tokens)
         if _fingerprint(token) in self._revoked_tokens:
             return None
-        return self._sealer.unseal(kind, token)
+        data = self._sealer.unseal(kind, token)
+        if data is None or int(data.get("gen", 0)) != self._generation:
+            return None
+        return data
 
     @staticmethod
     def _forget_expired(entries: dict[str, float]) -> None:
@@ -422,9 +426,9 @@ def _fingerprint(token: str) -> str:
 
 def _message_response(message: str, status: int) -> Response:
     return HTMLResponse(
-        _MESSAGE_TEMPLATE.format(message=html.escape(message)),
+        message_page(message),
         status_code=status,
-        headers=_SECURITY_HEADERS,
+        headers=SECURITY_HEADERS,
     )
 
 
@@ -432,50 +436,3 @@ def _expired_response() -> Response:
     return _message_response(
         "Permintaan login ini sudah tidak berlaku. Ulangi dari aplikasi AI-mu.", 400
     )
-
-
-_STYLE = """\
-:root{color-scheme:light dark}
-body{font:16px/1.5 system-ui,sans-serif;max-width:34rem;margin:2rem auto;padding:0 1rem}
-h1{font-size:1.4rem}
-textarea{width:100%;box-sizing:border-box;font:14px monospace;padding:.5rem}
-button{font:inherit;font-weight:600;padding:.6rem 1.2rem;margin-top:.75rem;cursor:pointer}
-.error{border-left:4px solid #c0392b;padding:.25rem .75rem}
-.note{font-size:.875rem;opacity:.8}
-.logo{display:block;margin-bottom:.5rem}
-code{overflow-wrap:anywhere}"""
-
-_MESSAGE_TEMPLATE = (
-    '<!doctype html><html lang="id"><head><meta charset="utf-8">'
-    '<meta name="viewport" content="width=device-width,initial-scale=1">'
-    '<link rel="icon" href="/favicon.ico">'
-    f"<title>LMS Telkom MCP</title><style>{_STYLE.replace('{', '{{').replace('}', '}}')}</style>"
-    '</head><body><img class="logo" src="/icon-64.png" width="48" height="48" alt="">'
-    "<h1>LMS Telkom MCP</h1><p>{message}</p></body></html>"
-)
-
-_LOGIN_TEMPLATE = (
-    '<!doctype html><html lang="id"><head><meta charset="utf-8">'
-    '<meta name="viewport" content="width=device-width,initial-scale=1">'
-    '<link rel="icon" href="/favicon.ico">'
-    f"<title>Hubungkan LMS</title><style>{_STYLE.replace('{', '{{').replace('}', '}}')}</style>"
-    """</head><body>
-<img class="logo" src="/icon-64.png" width="48" height="48" alt="">
-<h1>Hubungkan akun LMS-mu</h1>
-<p><strong>{client}</strong> ingin membaca data LMS atas namamu, seperti mata kuliah, deadline, dan materi.
-Akses akan dikirim ke <code>{target}</code>. Lanjutkan hanya kalau kamu yang memulai proses ini.</p>
-{error}
-<ol>
-<li>Buka <a href="{token_page}" target="_blank" rel="noopener noreferrer">halaman token LMS</a>, lalu login kalau diminta.</li>
-<li>Klik kanan tulisan "Click here if the app does not open automatically", lalu pilih <em>Copy link address</em>.</li>
-<li>Tempel hasilnya di kotak ini. Isi <code>LMS_TOKEN</code> dari file <code>.env</code> juga bisa dipakai.</li>
-</ol>
-<form method="post" action="login">
-<input type="hidden" name="request" value="{request}">
-<label for="lms_link">Tautan token</label>
-<textarea id="lms_link" name="lms_link" rows="4" required autocomplete="off" spellcheck="false" placeholder="moodlemobile://token=..."></textarea>
-<button type="submit">Hubungkan</button>
-</form>
-<p class="note">Ini proyek mahasiswa yang tidak resmi. Token setara akses penuh ke akun LMS-mu, jadi hanya tempel kalau kamu percaya pada pemilik server ini.</p>
-</body></html>"""
-)

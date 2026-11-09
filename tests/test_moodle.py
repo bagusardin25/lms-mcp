@@ -1,9 +1,10 @@
+import time
 from urllib.parse import parse_qs
 
 import httpx
 import pytest
 
-from lmstelkom_mcp.moodle import MoodleClient, MoodleError
+from lms_mcp.moodle import MoodleClient, MoodleError, run_parallel
 
 BASE_URL = "https://lms.contoh.test"
 TOKEN = "token-rahasia"
@@ -36,6 +37,94 @@ def test_call_sends_token_in_body_not_url():
     assert seen["body"]["wsfunction"] == ["core_course_get_contents"]
     assert seen["body"]["moodlewsrestformat"] == ["json"]
     assert seen["body"]["courseid"] == ["7"]
+
+
+def test_call_flattens_lists_and_dicts_for_moodle():
+    seen = {}
+
+    def on_request(request):
+        seen["body"] = parse_qs(request.content.decode())
+
+    client = client_returning(on_request=on_request)
+    client.call("fungsi", courseids=[7, 8], plugindata={"files_filemanager": 77})
+
+    assert seen["body"]["courseids[0]"] == ["7"]
+    assert seen["body"]["courseids[1]"] == ["8"]
+    assert seen["body"]["plugindata[files_filemanager]"] == ["77"]
+
+
+def test_upload_draft_file_sends_token_in_body_and_returns_item_id():
+    seen = {}
+
+    def on_request(request):
+        seen["url"] = str(request.url)
+        seen["body"] = request.content
+
+    client = client_returning(
+        httpx.Response(200, json=[{"filename": "a.pdf", "itemid": 77}]), on_request
+    )
+
+    assert client.upload_draft_file("a.pdf", b"isi-file") == 77
+    assert seen["url"].endswith("/webservice/upload.php")
+    assert TOKEN not in seen["url"]
+    assert TOKEN.encode() in seen["body"]
+    assert b'filename="a.pdf"' in seen["body"]
+    assert b"isi-file" in seen["body"]
+
+
+@pytest.mark.parametrize(
+    "payload, errorcode",
+    [
+        ({"exception": "x", "errorcode": "invalidtoken", "message": "Salah"}, "invalidtoken"),
+        ([{"error": "Terlalu besar", "errortype": "fileoversized"}], "fileoversized"),
+        ([], "uploadfailed"),
+    ],
+)
+def test_upload_draft_file_reports_errors(payload, errorcode):
+    client = client_returning(httpx.Response(200, json=payload))
+
+    with pytest.raises(MoodleError) as error:
+        client.upload_draft_file("a.pdf", b"isi")
+
+    assert error.value.errorcode == errorcode
+
+
+def flaky_client(failures):
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        if len(requests) <= failures:
+            raise httpx.RemoteProtocolError("Server disconnected", request=request)
+        return httpx.Response(200, json={"ok": True})
+
+    return MoodleClient(BASE_URL, TOKEN, httpx.MockTransport(handler)), requests
+
+
+def test_read_call_retries_once_when_connection_drops():
+    client, requests = flaky_client(failures=1)
+
+    assert client.call("core_course_get_contents") == {"ok": True}
+    assert len(requests) == 2
+
+
+def test_read_call_gives_up_after_second_drop():
+    client, requests = flaky_client(failures=2)
+
+    with pytest.raises(httpx.RemoteProtocolError):
+        client.call("core_course_get_contents")
+    assert len(requests) == 2
+
+
+@pytest.mark.parametrize(
+    "function", ["mod_assign_save_submission", "mod_assign_submit_for_grading"]
+)
+def test_write_call_is_not_retried_when_connection_drops(function):
+    client, requests = flaky_client(failures=1)
+
+    with pytest.raises(httpx.RemoteProtocolError):
+        client.call(function)
+    assert len(requests) == 1
 
 
 def test_call_returns_list_payload():
@@ -200,3 +289,13 @@ def test_download_keeps_real_json_file(tmp_path):
     client.download(FILE_URL, destination, MAX_BYTES)
 
     assert destination.exists()
+
+
+def test_run_parallel_keeps_input_order():
+    def slow_double(value):
+        # Yang selesai lebih dulu justru item terakhir, tetapi urutan hasil tidak berubah.
+        time.sleep(0.01 * (5 - value))
+        return value * 2
+
+    assert run_parallel(slow_double, [1, 2, 3, 4]) == [2, 4, 6, 8]
+    assert run_parallel(slow_double, []) == []
