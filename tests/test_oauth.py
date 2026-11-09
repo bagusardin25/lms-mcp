@@ -9,11 +9,11 @@ import httpx
 import pytest
 from starlette.testclient import TestClient
 
-from lmstelkom_mcp import oauth
-from lmstelkom_mcp.config import ConfigError, HttpConfig, load_http_config
-from lmstelkom_mcp.moodle import MoodleClient
-from lmstelkom_mcp.oauth import Sealer
-from lmstelkom_mcp.server import build_http_server, http_transport_options
+from lms_mcp import oauth
+from lms_mcp.config import ConfigError, HttpConfig, load_http_config
+from lms_mcp.moodle import MoodleClient
+from lms_mcp.oauth import Sealer
+from lms_mcp.server import build_http_server, http_transport_options
 
 PUBLIC_URL = "https://mcp.contoh.test"
 LMS_URL = "https://lms.contoh.test"

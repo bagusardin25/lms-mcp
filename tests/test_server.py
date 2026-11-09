@@ -5,10 +5,10 @@ import anyio
 import httpx
 from mcp import Client
 
-from lmstelkom_mcp.auth import TokenError
-from lmstelkom_mcp.moodle import MoodleClient
-from lmstelkom_mcp.server import build_server, embedded_icons
-from lmstelkom_mcp.service import LmsService
+from lms_mcp.auth import TokenError
+from lms_mcp.moodle import MoodleClient
+from lms_mcp.server import build_server, embedded_icons
+from lms_mcp.service import LmsService
 
 BASE_URL = "https://lms.contoh.test"
 SITE_INFO = {

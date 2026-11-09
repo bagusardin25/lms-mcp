@@ -1,9 +1,9 @@
 import pytest
 
-from lmstelkom_mcp import cli
-from lmstelkom_mcp.auth import TokenError
-from lmstelkom_mcp.config import Config, ConfigError
-from lmstelkom_mcp.moodle import MoodleError
+from lms_mcp import cli
+from lms_mcp.auth import TokenError
+from lms_mcp.config import Config, ConfigError
+from lms_mcp.moodle import MoodleError
 
 SITE_INFO = {
     "fullname": "Nama Mahasiswa",

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from lmstelkom_mcp.config import DEFAULT_BASE_URL, DEFAULT_DOWNLOAD_DIR, load_config
+from lms_mcp.config import DEFAULT_BASE_URL, DEFAULT_DOWNLOAD_DIR, load_config
 
 
 @pytest.fixture(autouse=True)

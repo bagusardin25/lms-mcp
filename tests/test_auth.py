@@ -2,7 +2,7 @@ import base64
 
 import pytest
 
-from lmstelkom_mcp.auth import TokenError, token_from_env
+from lms_mcp.auth import TokenError, token_from_env
 
 SIGNATURE = "a" * 32
 TOKEN = "f" * 32

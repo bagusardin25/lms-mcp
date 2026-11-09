@@ -7,8 +7,8 @@ from pptx import Presentation
 from pptx.util import Inches
 from pypdf import PdfWriter
 
-from lmstelkom_mcp import extract
-from lmstelkom_mcp.extract import ExtractError, file_format, read_pages
+from lms_mcp import extract
+from lms_mcp.extract import ExtractError, file_format, read_pages
 
 
 def make_pdf(*pages):

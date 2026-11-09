@@ -354,7 +354,7 @@ wheels = [
 ]
 
 [[package]]
-name = "lmstelkom-mcp"
+name = "lms-mcp"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

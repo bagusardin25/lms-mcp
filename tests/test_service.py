@@ -3,11 +3,11 @@ from urllib.parse import parse_qs
 import httpx
 import pytest
 
-from lmstelkom_mcp import service as service_module
-from lmstelkom_mcp.auth import TokenError
-from lmstelkom_mcp.config import Config
-from lmstelkom_mcp.moodle import MoodleClient, MoodleError
-from lmstelkom_mcp.service import (
+from lms_mcp import service as service_module
+from lms_mcp.auth import TokenError
+from lms_mcp.config import Config
+from lms_mcp.moodle import MoodleClient, MoodleError
+from lms_mcp.service import (
     LmsService,
     clean_text,
     create_client,

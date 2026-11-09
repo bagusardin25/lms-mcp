@@ -53,7 +53,7 @@ class MoodleClient:
         self._http = httpx.Client(
             base_url=base_url,
             timeout=30,
-            headers={"User-Agent": "lmstelkom-mcp/0.1"},
+            headers={"User-Agent": "lms-mcp/0.1"},
             transport=transport,
         )
 

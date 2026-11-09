@@ -3,7 +3,7 @@ from urllib.parse import parse_qs
 import httpx
 import pytest
 
-from lmstelkom_mcp.moodle import MoodleClient, MoodleError
+from lms_mcp.moodle import MoodleClient, MoodleError
 
 BASE_URL = "https://lms.contoh.test"
 TOKEN = "token-rahasia"
