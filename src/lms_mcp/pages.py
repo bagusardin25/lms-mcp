@@ -140,15 +140,21 @@ def login_page(
         )
     else:
         capability = (
-            "Tool di server ini hanya membaca data, jadi AI belum bisa mengumpulkan tugas "
+            "AI di server ini hanya bisa melihat data. AI belum bisa mengumpulkan tugas "
             "atau mengirim pesan."
         )
+    trust = (
+        "Server ini dijalankan mahasiswa, bukan kampus. "
+        f"{capability} Kunci masuk LMS-mu lewat server ini, dan orang yang menjalankannya "
+        "bisa melihat kunci itu. Lanjut hanya kalau kamu percaya orang itu."
+    )
     return _document(
         title,
         f"""<h1>Hubungkan LMS ke {client}</h1>
 <p class="lead">{client} akan bisa membaca mata kuliah, deadline, dan materimu. Data yang dibaca dikirim ke <code>{target}</code>.</p>
 {redirect_block}
 {loopback_block}
+<p class="notice">{trust}</p>
 <p class="quiet">Kalau bukan kamu yang memulai proses ini, tutup saja halaman ini.</p>
 {error_block}
 <form method="post" action="login">
