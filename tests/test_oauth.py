@@ -187,8 +187,6 @@ def test_metadata_advertises_registration_and_scopes(client):
         "https://claude.ai/api/mcp/auth_callback",
         "https://claude.com/api/mcp/auth_callback",
         "https://chatgpt.com/connector_platform_oauth_redirect",
-        "http://localhost:53123/callback",
-        "http://127.0.0.1:53123/callback",
     ],
 )
 def test_register_accepts_known_clients(client, redirect):
@@ -201,6 +199,8 @@ def test_register_accepts_known_clients(client, redirect):
         "https://penyerang.test/callback",
         "https://claude.ai.penyerang.test/callback",
         "http://claude.ai/api/mcp/auth_callback",
+        "http://127.0.0.1:53123/callback",
+        "http://localhost:53123/callback",
     ],
 )
 def test_register_rejects_unknown_redirect(client, redirect):
@@ -642,7 +642,8 @@ def test_login_page_is_clear_about_who_gets_access_and_status(client):
     assert "Hubungkan LMS ke Claude" in page
     assert "<code>claude.ai</code>" in page
     assert REDIRECT in page
-    assert "hanya membaca" in page
+    assert "hanya bisa melihat" in page
+    assert "bisa melihat kunci itu" in page
     assert "Tidak resmi" in page
     assert "tidak berafiliasi" in page
     assert '<label for="lms_link">' in page
@@ -651,8 +652,9 @@ def test_login_page_is_clear_about_who_gets_access_and_status(client):
 
 def test_login_page_warns_about_loopback_and_write_mode():
     redirect = "http://127.0.0.1:9/callback"
-    config = HttpConfig(LMS_URL, PUBLIC_URL, SECRET, enable_write=True)
-    with TestClient(make_app(config), base_url=PUBLIC_URL, follow_redirects=False) as client:
+    local_public = "http://127.0.0.1:8765"
+    config = HttpConfig(LMS_URL, local_public, SECRET, enable_write=True)
+    with TestClient(make_app(config), base_url=local_public, follow_redirects=False) as client:
         client_id = register(client, redirect=redirect).json()["client_id"]
         started = authorize(client, client_id, redirect=redirect)
         request = parse_qs(urlsplit(started.headers["location"]).query)["request"][0]

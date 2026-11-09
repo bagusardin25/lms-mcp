@@ -115,10 +115,12 @@ class LmsRefreshToken(RefreshToken):
     lms_token: str
 
 
-def _is_allowed_redirect(uri: str, allowed_hosts: set[str]) -> bool:
+def _is_allowed_redirect(uri: str, allowed_hosts: set[str], *, allow_loopback: bool) -> bool:
     parsed = urlsplit(uri)
+    # Alamat komputer sendiri hanya untuk server yang memang berjalan di komputer itu.
+    # Server publik yang mengizinkannya bisa mengirim kode login ke program di komputer teman.
     if parsed.hostname in _LOOPBACK_HOSTS:
-        return parsed.scheme in ("http", "https")
+        return allow_loopback and parsed.scheme in ("http", "https")
     return parsed.scheme == "https" and parsed.hostname in allowed_hosts
 
 
@@ -139,6 +141,7 @@ class LmsOAuthProvider:
         self._lms_url = lms_url
         self._verify_lms_token = verify_lms_token
         self._redirect_hosts = _DEFAULT_REDIRECT_HOSTS | extra_redirect_hosts
+        self._allow_loopback = (urlsplit(public_url).hostname or "") in _LOOPBACK_HOSTS
         self._enable_write = enable_write
         self._generation = token_generation
         self._login_limiter = RateLimiter(LOGIN_ATTEMPTS_PER_MINUTE, 60)
@@ -157,7 +160,9 @@ class LmsOAuthProvider:
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
         for uri in client_info.redirect_uris or []:
-            if not _is_allowed_redirect(str(uri), self._redirect_hosts):
+            if not _is_allowed_redirect(
+                str(uri), self._redirect_hosts, allow_loopback=self._allow_loopback
+            ):
                 raise RegistrationError(
                     error="invalid_redirect_uri",
                     error_description=f"Alamat redirect tidak diizinkan: {uri}",
@@ -212,6 +217,14 @@ class LmsOAuthProvider:
         link = str(form.get("lms_link") or "").strip()
         if not link:
             return self._render_login(sealed, data, "Tautan token belum diisi.", 400)
+        if not _is_allowed_redirect(
+            str(data.get("redirect_uri") or ""),
+            self._redirect_hosts,
+            allow_loopback=self._allow_loopback,
+        ):
+            return self._render_login(
+                sealed, data, "Alamat penerima login ini tidak diizinkan.", 400
+            )
 
         try:
             lms_token = token_from_env(link)
