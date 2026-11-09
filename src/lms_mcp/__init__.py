@@ -1,1 +1,1 @@
-"""MCP server untuk LMS Telkom University (Moodle)."""
+"""MCP server untuk LMS kampus berbasis Moodle."""

@@ -1,7 +1,7 @@
 [project]
 name = "lms-mcp"
 version = "0.1.0"
-description = "MCP server untuk LMS Telkom University (Moodle)"
+description = "MCP server untuk LMS kampus berbasis Moodle"
 authors = [{ name = "Bagus Ardin Prayoga" }]
 license = "MIT"
 readme = "README.md"
