@@ -10,7 +10,7 @@ from __future__ import annotations
 import base64
 import binascii
 import re
-from urllib.parse import unquote
+from urllib.parse import unquote, urlencode
 
 _TOKEN_PATTERN = re.compile(r"token=([A-Za-z0-9+/=%_-]+)")
 _ENV_LINE_PREFIX = re.compile(r"^(?:export\s+)?LMS_TOKEN\s*=\s*", re.IGNORECASE)
@@ -20,6 +20,19 @@ _WS_TOKEN = re.compile(r"[0-9a-fA-F]{32}")
 
 class TokenError(Exception):
     """Pesannya tidak pernah memuat nilai LMS_TOKEN."""
+
+
+def token_page_url(base_url: str) -> str:
+    """Halaman SSO aplikasi mobile Moodle yang menampilkan tautan moodlemobile://token=..."""
+    query = urlencode(
+        {
+            "service": "moodle_mobile_app",
+            "passport": "1",
+            "urlscheme": "moodlemobile",
+            "confirmed": "1",
+        }
+    )
+    return f"{base_url}/admin/tool/mobile/launch.php?{query}"
 
 
 def token_from_env(value: str) -> str:
