@@ -50,8 +50,8 @@ _READ_SLOTS = threading.BoundedSemaphore(3)
 def create_client(config: Config) -> MoodleClient:
     if not config.token:
         raise TokenError(
-            "Belum ada token. Jalankan lms-mcp token untuk mendapat tautannya, "
-            "lalu isi LMS_TOKEN di file .env."
+            "Belum ada kunci masuk LMS. Jalankan uv run lms-mcp login di folder proyek "
+            "lms-mcp, lalu coba lagi."
         )
     return MoodleClient(config.base_url, token_from_env(config.token))
 

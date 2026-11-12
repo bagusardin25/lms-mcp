@@ -16,7 +16,7 @@ import time
 import zlib
 from collections import deque
 from typing import Any, Callable
-from urllib.parse import quote, urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
 
 import anyio
 import httpx
@@ -47,7 +47,14 @@ CODE_SECONDS = 5 * 60
 LOGIN_REQUEST_SECONDS = 10 * 60
 
 MAX_LOGIN_BODY_BYTES = 16 * 1024
+# Dihitung per pengunjung. Satu kelas di Wi-Fi yang sama bisa terlihat sebagai satu
+# pengunjung, jadi batasnya tidak dibuat terlalu kecil.
 LOGIN_ATTEMPTS_PER_MINUTE = 30
+# Untuk seluruh server, supaya LMS tidak dibanjiri lewat halaman login.
+LOGIN_ATTEMPTS_PER_MINUTE_TOTAL = 600
+MAX_TRACKED_VISITORS = 5000
+# Berganti tiap server menyala, jadi sidik pengunjung tidak bisa dicocokkan di lain waktu.
+_VISITOR_SALT = secrets.token_bytes(16)
 
 _LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 # Tanpa daftar ini, siapa pun bisa mendaftarkan alamat tujuannya sendiri lalu memancing
@@ -91,19 +98,66 @@ class Sealer:
 
 
 class RateLimiter:
+    """Membatasi jumlah percobaan per kunci dalam rentang waktu, misalnya per pengunjung."""
+
     def __init__(self, limit: int, seconds: float) -> None:
         self._limit = limit
         self._seconds = seconds
-        self._times: deque[float] = deque()
+        self._times: dict[str, deque[float]] = {}
 
-    def allow(self) -> bool:
+    def allow(self, key: str = "") -> bool:
         now = time.monotonic()
-        while self._times and self._times[0] <= now - self._seconds:
-            self._times.popleft()
-        if len(self._times) >= self._limit:
+        times = self._times.get(key)
+        if times is None:
+            self._forget_idle(now)
+            times = self._times[key] = deque()
+        while times and times[0] <= now - self._seconds:
+            times.popleft()
+        if len(times) >= self._limit:
             return False
-        self._times.append(now)
+        times.append(now)
         return True
+
+    def _forget_idle(self, now: float) -> None:
+        # Tanpa ini, pengunjung yang hanya datang sekali terus menumpuk di memori.
+        if len(self._times) < MAX_TRACKED_VISITORS:
+            return
+        idle = [
+            key
+            for key, times in self._times.items()
+            if not times or times[-1] <= now - self._seconds
+        ]
+        for key in idle:
+            del self._times[key]
+        while len(self._times) >= MAX_TRACKED_VISITORS:
+            del self._times[next(iter(self._times))]
+
+
+def visitor_key(request: Request) -> str:
+    """Sidik alamat internet pengunjung, untuk menghitung percobaan per orang.
+
+    Railway mengisi X-Real-IP dengan alamat pengunjung. Tanpa header itu, yang dipakai
+    alamat sambungan langsung. Alamat aslinya tidak disimpan, hanya sidiknya.
+    """
+    address = request.headers.get("x-real-ip") or (request.client.host if request.client else "")
+    return hashlib.blake2b(address.strip().encode(), key=_VISITOR_SALT, digest_size=8).hexdigest()
+
+
+async def read_small_form(request: Request, limit: int) -> dict[str, str] | None:
+    """Membaca isian form sambil menghitung ukurannya. None berarti melebihi limit.
+
+    Content-Length bisa tidak dikirim, jadi ukuran dihitung dari isi yang benar-benar datang.
+    """
+    declared = request.headers.get("content-length")
+    if declared is not None and (not declared.isdigit() or int(declared) > limit):
+        return None
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > limit:
+            return None
+    fields = parse_qs(body.decode("utf-8", "replace"), keep_blank_values=True)
+    return {name: values[0] for name, values in fields.items()}
 
 
 class LmsAuthorizationCode(AuthorizationCode):
@@ -145,6 +199,7 @@ class LmsOAuthProvider:
         self._enable_write = enable_write
         self._generation = token_generation
         self._login_limiter = RateLimiter(LOGIN_ATTEMPTS_PER_MINUTE, 60)
+        self._all_logins = RateLimiter(LOGIN_ATTEMPTS_PER_MINUTE_TOTAL, 60)
         # Pencabutan hanya hidup di memori proses ini. Setelah restart, token lama
         # berlaku lagi sampai LMS_TOKEN_GENERATION dinaikkan, atau token direset di LMS.
         self._used_codes: dict[str, float] = {}
@@ -200,21 +255,22 @@ class LmsOAuthProvider:
         return self._render_login(sealed, data)
 
     async def login_submit(self, request: Request) -> Response:
-        if int(request.headers.get("content-length") or 0) > MAX_LOGIN_BODY_BYTES:
+        form = await read_small_form(request, MAX_LOGIN_BODY_BYTES)
+        if form is None:
             return _message_response("Data yang dikirim terlalu besar.", 413)
 
-        form = await request.form()
-        sealed = str(form.get("request") or "")
+        sealed = form.get("request", "")
         data = self._sealer.unseal("login", sealed)
         if data is None:
             return _expired_response()
 
-        if not self._login_limiter.allow():
+        # Satu orang yang mencoba terus tidak boleh membuat orang lain ikut ditolak.
+        if not self._login_limiter.allow(visitor_key(request)) or not self._all_logins.allow():
             return self._render_login(
                 sealed, data, "Terlalu banyak percobaan. Coba lagi sebentar lagi.", 429
             )
 
-        link = str(form.get("lms_link") or "").strip()
+        link = form.get("lms_link", "").strip()
         if not link:
             return self._render_login(sealed, data, "Tautan token belum diisi.", 400)
         if not _is_allowed_redirect(

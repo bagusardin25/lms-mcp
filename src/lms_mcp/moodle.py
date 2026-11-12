@@ -24,7 +24,10 @@ _Result = TypeVar("_Result")
 # perubahannya mungkin sudah terjadi.
 _WRITE_FUNCTIONS = {"mod_assign_save_submission", "mod_assign_submit_for_grading"}
 
-_RENEW_TOKEN = "Perbarui LMS_TOKEN di file .env, atau sambungkan ulang connector di aplikasi AI."
+_RENEW_TOKEN = (
+    "Di komputer, jalankan uv run lms-mcp login untuk mengambil kunci masuk yang baru. "
+    "Lewat situs, sambungkan ulang di aplikasi AI."
+)
 _ERROR_HINTS = {
     "invalidtoken": _RENEW_TOKEN,
     # Moodle memakai kode ini juga untuk token kedaluwarsa, dan alasan persisnya

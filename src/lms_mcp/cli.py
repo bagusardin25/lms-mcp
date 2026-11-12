@@ -1,16 +1,24 @@
-"""Perintah baris: lms-mcp check dan lms-mcp serve."""
+"""Perintah baris: lms-mcp login, token, check, dan serve."""
 
 from __future__ import annotations
 
 import argparse
+import getpass
 import html
 import sys
 import time
 
 import httpx
 
-from .auth import TokenError, token_page_url
-from .config import ConfigError, load_config
+from .auth import TokenError, token_from_env, token_page_url
+from .config import (
+    ConfigError,
+    base_url_from,
+    load_config,
+    read_settings,
+    save_token,
+    token_file,
+)
 from .deadlines import get_deadlines
 from .moodle import MoodleClient, MoodleError
 from .server import run_http_server, run_server
@@ -117,21 +125,60 @@ def cmd_check() -> int:
     return 1 if failed else 0
 
 
+_COPY_LINK_STEP = (
+    'Klik kanan "Click here if the app does not open automatically", lalu pilih '
+    '"Copy link address".'
+)
+
+
 def cmd_token() -> int:
-    print("Buka halaman ini di browser dan login kalau diminta:")
-    print(f"  {token_page_url(load_config().base_url)}")
-    print(
-        'Lalu klik kanan "Click here if the app does not open automatically", pilih '
-        '"Copy link address", dan tempel setelah LMS_TOKEN= di file .env.'
-    )
+    print("Buka halaman ini di browser dan masuk kalau diminta:")
+    print(f"  {token_page_url(base_url_from(read_settings()))}")
+    print(_COPY_LINK_STEP)
+    print("Untuk menyimpan tautannya, jalankan: lms-mcp login")
+    return 0
+
+
+def cmd_login() -> int:
+    """Mengambil kunci masuk dan menyimpannya di luar folder proyek."""
+    values = read_settings()
+    base_url = base_url_from(values)
+    path = token_file(values)
+
+    print("1. Buka halaman ini di browser, lalu masuk kalau diminta:")
+    print(f"   {token_page_url(base_url)}")
+    print(f"2. {_COPY_LINK_STEP}")
+    try:
+        # Tidak ditampilkan, supaya tautannya tidak tertinggal di layar atau riwayat terminal.
+        link = getpass.getpass(
+            "3. Tempel tautannya di sini, lalu tekan Enter (tidak tampil di layar): "
+        )
+    except (KeyboardInterrupt, EOFError):
+        print("\nDibatalkan. Tidak ada yang disimpan.", file=sys.stderr)
+        return 1
+
+    # Yang disimpan hanya kunci untuk membaca LMS. Bagian tautan yang bisa dipakai masuk
+    # ke situs LMS lewat browser dibuang.
+    token = token_from_env(link)
+    info = MoodleClient(base_url, token).call("core_webservice_get_site_info")
+    save_token(path, token)
+
+    print(f"\nTerhubung sebagai {info['fullname']}.")
+    print(f"Kunci masuk tersimpan di {path}")
+    if (values.get("LMS_TOKEN") or "").strip():
+        print(
+            "Catatan: LMS_TOKEN di file .env masih terisi dan tetap dipakai lebih dulu. "
+            "Kosongkan kalau ingin memakai kunci yang baru disimpan."
+        )
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="lms-mcp", description="MCP untuk LMS berbasis Moodle")
     commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("login", help="ambil kunci masuk LMS dan simpan di komputer ini")
     commands.add_parser("check", help="uji akses ke API LMS")
-    commands.add_parser("token", help="tampilkan alamat halaman untuk mengambil token")
+    commands.add_parser("token", help="tampilkan alamat halaman kunci masuk saja")
     serve = commands.add_parser("serve", help="jalankan MCP server")
     serve.add_argument(
         "--http", action="store_true", help="mode online lewat HTTP dengan login OAuth"
@@ -147,6 +194,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "token":
             return cmd_token()
+        if args.command == "login":
+            return cmd_login()
         return cmd_check()
     except ConfigError as error:
         print(f"Konfigurasi belum lengkap: {error}", file=sys.stderr)

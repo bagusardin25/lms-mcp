@@ -10,6 +10,8 @@ from dotenv import dotenv_values
 
 DEFAULT_BASE_URL = "https://lms.telkomuniversity.ac.id"
 DEFAULT_DOWNLOAD_DIR = Path.home() / "Downloads" / "lms-mcp"
+# Di luar folder proyek, supaya AI yang bisa membuka folder proyek tidak ikut membacanya.
+DEFAULT_TOKEN_FILE = Path.home() / ".lms-mcp" / "token.txt"
 ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 MIN_SERVER_SECRET_LENGTH = 32
 DEFAULT_UPLOAD_DIRS = tuple(Path.home() / name for name in ("Documents", "Downloads", "Desktop"))
@@ -26,20 +28,63 @@ def _generation(value: str | None) -> int:
     return int(text)
 
 
+def read_settings(env_path: Path | None = None) -> dict[str, str | None]:
+    """Variabel environment mengalahkan nilai di .env."""
+    return {**dotenv_values(env_path or ENV_PATH), **os.environ}
+
+
+def base_url_from(values: dict[str, str | None]) -> str:
+    return (values.get("LMS_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
+
+
+def token_file(values: dict[str, str | None]) -> Path:
+    """File kunci masuk: yang disebut di LMS_TOKEN_FILE, atau file bawaan lms-mcp login."""
+    configured = (values.get("LMS_TOKEN_FILE") or "").strip()
+    return Path(configured).expanduser() if configured else DEFAULT_TOKEN_FILE
+
+
+def save_token(path: Path, token: str) -> None:
+    """Menyimpan kunci masuk. Di macOS dan Linux, hanya pemilik akun yang bisa membacanya."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        handle.write(token + "\n")
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
+
+
+def _read_token_file(path: Path) -> str:
+    try:
+        raw = path.read_bytes()
+    except OSError as error:
+        raise ConfigError(
+            f"File kunci masuk tidak bisa dibaca: {path}. Periksa LMS_TOKEN_FILE, "
+            "atau jalankan lms-mcp login."
+        ) from error
+    # PowerShell lama menyimpan hasil `echo ... > file` sebagai UTF-16, dan Notepad lama
+    # menaruh penanda di awal file UTF-8. Keduanya tetap harus terbaca.
+    encoding = "utf-16" if raw[:2] in (b"\xff\xfe", b"\xfe\xff") else "utf-8-sig"
+    try:
+        return raw.decode(encoding).strip()
+    except UnicodeDecodeError as error:
+        raise ConfigError(
+            f"File kunci masuk harus berisi teks biasa: {path}. Jalankan lms-mcp login "
+            "untuk membuatnya ulang."
+        ) from error
+
+
 def _token_value(values: dict[str, str | None]) -> str | None:
-    """LMS_TOKEN menang kalau diisi. Kalau kosong, token dibaca dari LMS_TOKEN_FILE."""
+    """LMS_TOKEN menang kalau diisi. Kalau kosong, kunci masuk dibaca dari file."""
     direct = (values.get("LMS_TOKEN") or "").strip()
     if direct:
         return direct
-    file_name = (values.get("LMS_TOKEN_FILE") or "").strip()
-    if not file_name:
+    path = token_file(values)
+    # File bawaan boleh belum ada. File yang disebut di LMS_TOKEN_FILE harus ada.
+    if not (values.get("LMS_TOKEN_FILE") or "").strip() and not path.is_file():
         return None
-    path = Path(file_name).expanduser()
-    try:
-        text = path.read_text(encoding="utf-8").strip()
-    except OSError as error:
-        raise ConfigError(f"LMS_TOKEN_FILE tidak bisa dibaca: {path}.") from error
-    return text or None
+    return _read_token_file(path) or None
 
 
 @dataclass(frozen=True)
@@ -96,12 +141,11 @@ def load_http_config(env_path: Path = ENV_PATH) -> HttpConfig:
 
 def load_config(env_path: Path = ENV_PATH) -> Config:
     """Variabel environment mengalahkan nilai di .env."""
-    values = {**dotenv_values(env_path), **os.environ}
-    base_url = values.get("LMS_BASE_URL") or DEFAULT_BASE_URL
+    values = read_settings(env_path)
     download_dir = values.get("LMS_DOWNLOAD_DIR")
     upload_dirs = values.get("LMS_UPLOAD_DIRS") or ""
     return Config(
-        base_url=base_url.rstrip("/"),
+        base_url=base_url_from(values),
         token=_token_value(values),
         download_dir=Path(download_dir).expanduser() if download_dir else DEFAULT_DOWNLOAD_DIR,
         enable_write=_is_enabled(values.get("LMS_ENABLE_WRITE")),

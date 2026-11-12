@@ -3,7 +3,7 @@ import hashlib
 import html
 import json
 import re
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 import httpx
 import pytest
@@ -692,3 +692,104 @@ def test_expired_login_page_explains_next_step(client):
     assert response.status_code == 400
     assert "Ulangi dari aplikasi AI" in response.text
     assert "Tidak resmi" in response.text
+
+
+def login_from(client, request, link, address):
+    return client.post(
+        "/login", data={"request": request, "lms_link": link}, headers={"X-Real-IP": address}
+    )
+
+
+def test_one_visitor_cannot_lock_out_the_others(client):
+    client_id = register(client).json()["client_id"]
+    request = login_request(client, client_id)
+
+    for _ in range(oauth.LOGIN_ATTEMPTS_PER_MINUTE):
+        assert login_from(client, request, lms_link(TOKEN_REJECTED), "10.0.0.1").status_code == 400
+
+    assert login_from(client, request, lms_link(TOKEN_ANI), "10.0.0.1").status_code == 429
+    assert login_from(client, request, lms_link(TOKEN_ANI), "10.0.0.2").status_code == 303
+
+
+def test_login_has_a_ceiling_for_the_whole_server(monkeypatch):
+    monkeypatch.setattr(oauth, "LOGIN_ATTEMPTS_PER_MINUTE_TOTAL", 3)
+    with TestClient(make_app(), base_url=PUBLIC_URL, follow_redirects=False) as client:
+        client_id = register(client).json()["client_id"]
+        request = login_request(client, client_id)
+
+        for number in range(3):
+            response = login_from(client, request, lms_link(TOKEN_REJECTED), f"10.0.1.{number}")
+            assert response.status_code == 400
+
+        assert login_from(client, request, lms_link(TOKEN_ANI), "10.0.1.99").status_code == 429
+
+
+def test_rate_limiter_forgets_visitors_instead_of_growing(monkeypatch):
+    monkeypatch.setattr(oauth, "MAX_TRACKED_VISITORS", 3)
+    limiter = oauth.RateLimiter(5, 60)
+
+    for number in range(10):
+        assert limiter.allow(f"pengunjung-{number}")
+
+    assert len(limiter._times) <= 3
+
+
+def test_visitor_key_does_not_keep_the_address(client):
+    seen = []
+
+    async def endpoint(request):
+        seen.append(oauth.visitor_key(request))
+        return oauth._message_response("ok", 200)
+
+    from starlette.applications import Starlette
+    from starlette.routing import Route
+
+    with TestClient(Starlette(routes=[Route("/", endpoint)])) as plain:
+        plain.get("/", headers={"X-Real-IP": "203.0.113.7"})
+        plain.get("/", headers={"X-Real-IP": "203.0.113.7"})
+        plain.get("/", headers={"X-Real-IP": "203.0.113.8"})
+
+    assert seen[0] == seen[1] != seen[2]
+    assert "203.0.113" not in seen[0]
+
+
+def chunked(body):
+    """Isi yang dikirim sepotong-sepotong, jadi tanpa Content-Length."""
+
+    def pieces():
+        for start in range(0, len(body), 4096):
+            yield body[start : start + 4096]
+
+    return pieces()
+
+
+FORM_HEADERS = {"Content-Type": "application/x-www-form-urlencoded"}
+
+
+def test_login_form_without_declared_size_still_works(client):
+    client_id = register(client).json()["client_id"]
+    body = urlencode(
+        {"request": login_request(client, client_id), "lms_link": lms_link(TOKEN_ANI)}
+    ).encode()
+
+    response = client.post("/login", content=chunked(body), headers=FORM_HEADERS)
+
+    assert "content-length" not in response.request.headers
+    assert response.status_code == 303
+
+
+def test_oversized_login_form_is_cut_off_even_without_declared_size(client):
+    body = b"lms_link=" + b"x" * (oauth.MAX_LOGIN_BODY_BYTES + 1)
+
+    response = client.post("/login", content=chunked(body), headers=FORM_HEADERS)
+
+    assert "content-length" not in response.request.headers
+    assert response.status_code == 413
+
+
+def test_oversized_login_form_is_refused_from_its_declared_size(client):
+    response = client.post(
+        "/login", data={"request": "x", "lms_link": "y" * oauth.MAX_LOGIN_BODY_BYTES}
+    )
+
+    assert response.status_code == 413

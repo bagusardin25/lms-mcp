@@ -2,11 +2,14 @@ from pathlib import Path
 
 import pytest
 
+from lms_mcp import config as config_module
 from lms_mcp.config import (
     DEFAULT_BASE_URL,
     DEFAULT_DOWNLOAD_DIR,
     DEFAULT_UPLOAD_DIRS,
+    ConfigError,
     load_config,
+    save_token,
 )
 
 
@@ -106,3 +109,62 @@ def test_environment_overrides_file(tmp_path, monkeypatch):
     monkeypatch.setenv("LMS_TOKEN", "dari-env")
 
     assert load_config(env_path).token == "dari-env"
+
+
+LINK = "moodlemobile://token=QUJD"
+
+
+def test_key_saved_by_login_is_found_without_any_setting(tmp_path):
+    # conftest mengarahkan file bawaan ke folder sementara.
+    save_token(config_module.DEFAULT_TOKEN_FILE, "f" * 32)
+
+    assert load_config(tmp_path / ".env").token == "f" * 32
+
+
+def test_env_value_wins_over_saved_key(tmp_path):
+    save_token(config_module.DEFAULT_TOKEN_FILE, "f" * 32)
+    env_path = tmp_path / ".env"
+    env_path.write_text("LMS_TOKEN=dari-env-file\n", encoding="utf-8")
+
+    assert load_config(env_path).token == "dari-env-file"
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        LINK.encode("utf-8") + b"\r\n",
+        # Notepad lama menaruh penanda di awal file.
+        b"\xef\xbb\xbf" + LINK.encode("utf-8"),
+        # PowerShell lama: echo "tautan" > token.txt
+        (LINK + "\r\n").encode("utf-16"),
+    ],
+)
+def test_key_file_is_read_in_common_windows_encodings(tmp_path, raw):
+    token_path = tmp_path / "token.txt"
+    token_path.write_bytes(raw)
+    env_path = tmp_path / ".env"
+    env_path.write_text(f'LMS_TOKEN_FILE="{token_path.as_posix()}"\n', encoding="utf-8")
+
+    assert load_config(env_path).token == LINK
+
+
+def test_key_file_that_is_not_text_is_explained(tmp_path):
+    token_path = tmp_path / "token.txt"
+    token_path.write_bytes(b"\x80\x81\x82 bukan teks")
+    env_path = tmp_path / ".env"
+    env_path.write_text(f'LMS_TOKEN_FILE="{token_path.as_posix()}"\n', encoding="utf-8")
+
+    with pytest.raises(ConfigError) as error:
+        load_config(env_path)
+
+    assert "teks biasa" in str(error.value)
+    assert "lms-mcp login" in str(error.value)
+
+
+def test_save_token_creates_the_folder_and_replaces_the_old_key(tmp_path):
+    token_path = tmp_path / "belum-ada" / "token.txt"
+
+    save_token(token_path, "a" * 32)
+    save_token(token_path, "b" * 32)
+
+    assert token_path.read_text(encoding="utf-8") == "b" * 32 + "\n"
