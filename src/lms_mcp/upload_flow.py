@@ -20,7 +20,7 @@ from starlette.responses import HTMLResponse, Response
 
 from .assignments import MAX_UPLOAD_BYTES, AssignmentError, AssignmentOperations
 from .moodle import MoodleError
-from .oauth import SECURITY_HEADERS, RateLimiter, Sealer
+from .oauth import SECURITY_HEADERS, RateLimiter, Sealer, visitor_key
 from .pages import message_page, upload_form_page, upload_result_page
 
 UPLOAD_LINK_SECONDS = 15 * 60
@@ -113,16 +113,16 @@ class UploadFlow:
         try:
             if form.get("step") == "final":
                 return await self._submit_final(form)
-            return await self._save(form)
+            return await self._save(form, visitor_key(request))
         finally:
             await form.close()
 
-    async def _save(self, form: Any) -> Response:
+    async def _save(self, form: Any, visitor: str) -> Response:
         sealed = str(form.get("request") or "")
         data = self._open("upload", sealed)
         if data is None:
             return _expired()
-        if not self._limiter.allow():
+        if not self._limiter.allow(visitor):
             return await self._form_with_error(data, sealed, "Terlalu banyak percobaan. Coba lagi sebentar lagi.", 429)
 
         upload = form.get("file")
