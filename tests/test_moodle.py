@@ -170,7 +170,7 @@ def test_token_errors_explain_what_to_do(errorcode, message):
     with pytest.raises(MoodleError) as error:
         client.call("fungsi")
     assert error.value.errorcode == errorcode
-    assert ".env" in str(error.value)
+    assert "lms-mcp login" in str(error.value)
 
 
 def test_call_raises_on_non_json_response():

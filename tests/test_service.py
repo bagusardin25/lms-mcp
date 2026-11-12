@@ -673,7 +673,7 @@ def test_format_time_uses_wib():
 def test_create_client_requires_token():
     with pytest.raises(TokenError) as error:
         create_client(Config(BASE_URL, None))
-    assert ".env" in str(error.value)
+    assert "lms-mcp login" in str(error.value)
 
 
 def test_create_client_rejects_broken_link():
